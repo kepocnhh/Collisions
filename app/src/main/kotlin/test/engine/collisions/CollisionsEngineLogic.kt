@@ -48,7 +48,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     32.0 -> 40.0
                     else -> 16.0
                 }
-                KeyboardButton.Q -> env.started = !env.started
+                KeyboardButton.Q -> env.paused = !env.paused
                 else -> Unit
             }
         }
@@ -77,27 +77,17 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             val body = bodies[index]
             // a = (v - v0) / t
             // v = a * t + v0
-            val l = body.acceleration.length(timeDiff) // units per second
-//            val a = body.acceleration.per(TimeUnit.SECONDS)
-//            val t = timeDiff.inWholeMilliseconds.toDouble() / 1_000
-            val v0 = body.moving.speed.per(TimeUnit.SECONDS)
-//            println("$index] a: " + a.toString(points = 6))
-            println("$index] v0: " + v0.toString(points = 6))
-//            println("$index] t: " + t.toString(points = 6))
-            println("$index] l: " + l.toString(points = 6))
-//            println("$index] a * t: " + (a * t).toString(points = 6))
-//            val v = a * t + v0
-            val v = kotlin.math.max(l + v0, 0.0)
-            println("$index] v: " + v.toString(points = 6))
-            //
-//            0] a: -0.000100
-//            0] v0: 0.001000
-//            0] t: 20
-//            0] a * t: -0.002
-//            0] v: -0.001000
-            //
-            body.moving.speed.set(v, TimeUnit.SECONDS)
-//            if (v == 0.0) continue // todo
+            val d = body.acceleration.speed(timeDiff, TimeUnit.NANOSECONDS)
+            val v0 = body.moving.speed.per(TimeUnit.NANOSECONDS)
+//            println("$index] v0: " + v0.toString(points = 6))
+//            println("$index] d: " + d.toString(points = 6))
+            val v = kotlin.math.max(v0 + d, 0.0)
+            if (v == 0.0) {
+                body.moving.speed.clear()
+                body.acceleration.clear() // todo
+                continue
+            }
+            body.moving.speed.set(v, TimeUnit.NANOSECONDS)
             val length = body.moving.speed.length(timeDiff)
             println("$index] length: $length")
             println("$index] before: ${body.moving.point}")
@@ -350,7 +340,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
     override fun onRender(canvas: Canvas) {
         // todo time diff
         moveCamera(camera = env.camera)
-        if (env.started) {
+        if (!env.paused) {
             moveBodies(bodies = env.bodies)
         }
         val point = env.camera.point
@@ -399,7 +389,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                         point = MutablePoint(x = -4.0, y = 0.0),
                         speed = MutableSpeed(magnitude = 1.0, timeUnit = TimeUnit.SECONDS),
                     ),
-                    acceleration = MutableSpeed(magnitude = -0.1, timeUnit = TimeUnit.SECONDS),
+                    acceleration = MutableAcceleration(magnitude = -0.1, timeUnit = TimeUnit.SECONDS),
                     direction = 0.0,
                     mass = 1.0,
                 ),
@@ -408,7 +398,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                         point = MutablePoint(x = 4.0, y = 0.0),
                         speed = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
                     ),
-                    acceleration = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
+                    acceleration = MutableAcceleration(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
                     direction = 0.0,
                     mass = 1.0,
                 ),
@@ -417,7 +407,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 measure = measure,
                 camera = camera,
                 bodies = bodies,
-                started = false,
+                paused = true,
             )
         }
 

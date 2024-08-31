@@ -8,5 +8,5 @@ internal class Environment(
     val measure: MutableDoubleMeasure,
     val camera: MutableMoving,
     val bodies: List<Body>,
-    var started: Boolean,
+    var paused: Boolean,
 )
