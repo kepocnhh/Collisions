@@ -3,21 +3,28 @@ package test.engine.collisions
 import sp.kx.lwjgl.engine.Engine
 import sp.kx.lwjgl.engine.EngineInputCallback
 import sp.kx.lwjgl.engine.EngineLogic
+import sp.kx.lwjgl.engine.input.Keyboard
 import sp.kx.lwjgl.entity.Canvas
 import sp.kx.lwjgl.entity.Color
 import sp.kx.lwjgl.entity.input.KeyboardButton
+import sp.kx.math.MutableOffset
 import sp.kx.math.MutablePoint
 import sp.kx.math.Offset
 import sp.kx.math.Point
+import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
+import sp.kx.math.distanceOf
+import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
 import sp.kx.math.measure.MutableSpeed
+import sp.kx.math.measure.diff
 import sp.kx.math.minus
 import sp.kx.math.moved
 import sp.kx.math.plus
 import sp.kx.math.pointOf
+import sp.kx.math.radians
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
@@ -41,11 +48,30 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         }
     }
 
+    private fun moveCamera() {
+        val offset = engine.input.keyboard.getOffset(
+            upKey = KeyboardButton.W,
+            downKey = KeyboardButton.S,
+            leftKey = KeyboardButton.A,
+            rightKey = KeyboardButton.D,
+        )
+        if (offset.isEmpty()) return
+        val timeDiff = engine.property.time.diff()
+        val length = env.camera.speed.length(timeDiff)
+        val multiplier = kotlin.math.min(1.0, distanceOf(offset))
+        val target = env.camera.point.moved(
+            length = length * multiplier,
+            angle = angleOf(offset).radians(),
+        )
+        env.camera.point.set(target)
+    }
+
     private fun onRenderCamera(
         canvas: Canvas,
         offset: Offset,
         measure: Measure<Double, Double>,
     ) {
+        moveCamera()
         canvas.vectors.draw(
             color = Color.GREEN,
             vector = vectorOf(-1.0, 0.0, 1.0, 0.0),
@@ -243,6 +269,28 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 measure = measure,
                 camera = camera,
             )
+        }
+
+        private fun Keyboard.getOffset(
+            upKey: KeyboardButton,
+            downKey: KeyboardButton,
+            leftKey: KeyboardButton,
+            rightKey: KeyboardButton,
+        ): Offset {
+            val result = MutableOffset(dX = 0.0, dY = 0.0)
+            val down = isPressed(downKey)
+            if (isPressed(upKey)) {
+                if (!down) result.dY = -1.0
+            } else if (down) {
+                result.dY = 1.0
+            }
+            val right = isPressed(rightKey)
+            if (isPressed(leftKey)) {
+                if (!right) result.dX = -1.0
+            } else if (right) {
+                result.dX = 1.0
+            }
+            return result
         }
     }
 }
