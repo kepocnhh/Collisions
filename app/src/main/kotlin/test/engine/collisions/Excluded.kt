@@ -33,3 +33,11 @@ internal operator fun Offset.minus(measure: Measure<Double, Double>): Offset {
         dY = measure.units(dY),
     )
 }
+
+@Deprecated("sp.kx.math.plus")
+internal operator fun Offset.plus(other: Offset): Offset {
+    return offsetOf(
+        dX = dX + other.dX,
+        dY = dY + other.dY,
+    )
+}

@@ -15,17 +15,22 @@ import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
 import sp.kx.math.distanceOf
+import sp.kx.math.gt
 import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
 import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.diff
+import sp.kx.math.measure.isEmpty
 import sp.kx.math.minus
 import sp.kx.math.moved
+import sp.kx.math.offsetOf
 import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.radians
+import sp.kx.math.toString
 import sp.kx.math.vectorOf
+import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
@@ -43,12 +48,13 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     32.0 -> 40.0
                     else -> 16.0
                 }
+                KeyboardButton.Q -> env.started = !env.started
                 else -> Unit
             }
         }
     }
 
-    private fun moveCamera() {
+    private fun moveCamera(camera: MutableMoving) {
         val offset = engine.input.keyboard.getOffset(
             upKey = KeyboardButton.W,
             downKey = KeyboardButton.S,
@@ -57,13 +63,81 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         )
         if (offset.isEmpty()) return
         val timeDiff = engine.property.time.diff()
-        val length = env.camera.speed.length(timeDiff)
+        val length = camera.speed.length(timeDiff)
         val multiplier = kotlin.math.min(1.0, distanceOf(offset))
-        val target = env.camera.point.moved(
+        camera.point.move(
             length = length * multiplier,
             angle = angleOf(offset).radians(),
         )
-        env.camera.point.set(target)
+    }
+
+    private fun moveBodies(bodies: List<Body>) {
+        val timeDiff = engine.property.time.diff()
+        for (index in bodies.indices) {
+            val body = bodies[index]
+            // a = (v - v0) / t
+            // v = a * t + v0
+            val l = body.acceleration.length(timeDiff) // units per second
+//            val a = body.acceleration.per(TimeUnit.SECONDS)
+//            val t = timeDiff.inWholeMilliseconds.toDouble() / 1_000
+            val v0 = body.moving.speed.per(TimeUnit.SECONDS)
+//            println("$index] a: " + a.toString(points = 6))
+            println("$index] v0: " + v0.toString(points = 6))
+//            println("$index] t: " + t.toString(points = 6))
+            println("$index] l: " + l.toString(points = 6))
+//            println("$index] a * t: " + (a * t).toString(points = 6))
+//            val v = a * t + v0
+            val v = kotlin.math.max(l + v0, 0.0)
+            println("$index] v: " + v.toString(points = 6))
+            //
+//            0] a: -0.000100
+//            0] v0: 0.001000
+//            0] t: 20
+//            0] a * t: -0.002
+//            0] v: -0.001000
+            //
+            body.moving.speed.set(v, TimeUnit.SECONDS)
+//            if (v == 0.0) continue // todo
+            val length = body.moving.speed.length(timeDiff)
+            println("$index] length: $length")
+            println("$index] before: ${body.moving.point}")
+            val target = body.moving.point.moved(
+                length = length,
+                angle = body.direction,
+            )
+            println("$index] after: $target")
+            body.moving.point.set(target)
+        }
+    }
+
+    private fun onRenderBodies(
+        canvas: Canvas,
+        offset: Offset,
+        measure: Measure<Double, Double>,
+        bodies: List<Body>,
+    ) {
+        val info = FontInfoUtil.getFontInfo(height = 1.0, measure = measure)
+        for (index in bodies.indices) {
+            val body = bodies[index]
+            canvas.polygons.drawCircle(
+                borderColor = Color.BLUE,
+                fillColor = Color.BLUE.copy(alpha = 0.5f),
+                pointCenter = body.moving.point,
+                radius = 1.0,
+                lineWidth = 0.1,
+                edgeCount = 16,
+                offset = offset,
+                measure = measure,
+            )
+            canvas.texts.draw(
+                color = Color.BLUE,
+                info = info,
+                pointTopLeft = body.moving.point,
+                offset = offset + offsetOf(dX = -0.5, dY = -0.5),
+                measure = measure,
+                text = String.format("%02d", index),
+            )
+        }
     }
 
     private fun onRenderCamera(
@@ -71,17 +145,16 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         offset: Offset,
         measure: Measure<Double, Double>,
     ) {
-        moveCamera()
         canvas.vectors.draw(
-            color = Color.GREEN,
-            vector = vectorOf(-1.0, 0.0, 1.0, 0.0),
+            color = Color.WHITE,
+            vector = vectorOf(-0.5, 0.0, 0.5, 0.0),
             offset = offset,
             measure = measure,
             lineWidth = 0.1,
         )
         canvas.vectors.draw(
-            color = Color.GREEN,
-            vector = vectorOf(0.0, -1.0, 0.0, 1.0),
+            color = Color.WHITE,
+            vector = vectorOf(0.0, -0.5, 0.0, 0.5),
             offset = offset,
             measure = measure,
             lineWidth = 0.1,
@@ -228,18 +301,73 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             ),
             measure = measure,
         )
+        env.bodies.forEachIndexed { index, body ->
+            canvas.texts.draw(
+                color = Color.GREEN,
+                info = info,
+                pointTopLeft = pointOf(
+                    x = 4.0,
+                    y = 2.0 + y++,
+                ),
+                text = String.format(
+                    "Body #$index: x %.1f y %.1f",
+                    body.moving.point.x,
+                    body.moving.point.y,
+                ),
+                measure = measure,
+            )
+            canvas.texts.draw(
+                color = Color.GREEN,
+                info = info,
+                pointTopLeft = pointOf(
+                    x = 4.0,
+                    y = 2.0 + y++,
+                ),
+                text = String.format(
+                    "    speed: ${body.moving.speed}",
+                    body.moving.point.x,
+                    body.moving.point.y,
+                ),
+                measure = measure,
+            )
+            canvas.texts.draw(
+                color = Color.GREEN,
+                info = info,
+                pointTopLeft = pointOf(
+                    x = 4.0,
+                    y = 2.0 + y++,
+                ),
+                text = String.format(
+                    "    acceleration: ${body.acceleration}",
+                    body.moving.point.x,
+                    body.moving.point.y,
+                ),
+                measure = measure,
+            )
+        }
     }
 
     override fun onRender(canvas: Canvas) {
+        // todo time diff
+        moveCamera(camera = env.camera)
+        if (env.started) {
+            moveBodies(bodies = env.bodies)
+        }
+        val point = env.camera.point
+        val centerPoint = engine.property.pictureSize.centerPoint() - env.measure
+        val offset = centerPoint - point
+        onRenderBodies(
+            canvas = canvas,
+            offset = offset,
+            measure = env.measure,
+            bodies = env.bodies,
+        )
         val centerOffset = engine.property.pictureSize.center() - env.measure
         onRenderCamera(
             canvas = canvas,
             offset = centerOffset,
             measure = env.measure,
         )
-        val point = env.camera.point
-        val centerPoint = engine.property.pictureSize.centerPoint() - env.measure
-        val offset = centerPoint - point
         if (engine.input.keyboard.isPressed(KeyboardButton.I)) {
             onRenderGrid(
                 canvas = canvas,
@@ -265,9 +393,31 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 point = MutablePoint(x = 0.0, y = 0.0),
                 speed = MutableSpeed(magnitude = 12.0, timeUnit = TimeUnit.SECONDS),
             )
+            val bodies = listOf(
+                Body(
+                    moving = MutableMoving(
+                        point = MutablePoint(x = -4.0, y = 0.0),
+                        speed = MutableSpeed(magnitude = 1.0, timeUnit = TimeUnit.SECONDS),
+                    ),
+                    acceleration = MutableSpeed(magnitude = -0.1, timeUnit = TimeUnit.SECONDS),
+                    direction = 0.0,
+                    mass = 1.0,
+                ),
+                Body(
+                    moving = MutableMoving(
+                        point = MutablePoint(x = 4.0, y = 0.0),
+                        speed = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
+                    ),
+                    acceleration = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
+                    direction = 0.0,
+                    mass = 1.0,
+                ),
+            )
             return Environment(
                 measure = measure,
                 camera = camera,
+                bodies = bodies,
+                started = false,
             )
         }
 
