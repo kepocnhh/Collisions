@@ -15,6 +15,8 @@ import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
 import sp.kx.math.distanceOf
+import sp.kx.math.getPerpendicular
+import sp.kx.math.getShortestPoint
 import sp.kx.math.gt
 import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
@@ -28,9 +30,14 @@ import sp.kx.math.offsetOf
 import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.radians
+import sp.kx.math.sizeOf
+import sp.kx.math.toOffset
 import sp.kx.math.toString
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Body
+import test.engine.collisions.entity.Circle
+import test.engine.collisions.entity.Dot
+import test.engine.collisions.entity.Line
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
@@ -49,6 +56,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     else -> 16.0
                 }
                 KeyboardButton.Q -> env.paused = !env.paused
+                KeyboardButton.I -> env.debug = !env.debug
                 else -> Unit
             }
         }
@@ -352,13 +360,43 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             measure = env.measure,
             bodies = env.bodies,
         )
+        for (line in env.lines) {
+            canvas.vectors.draw(
+                color = line.color,
+                vector = line.vector,
+                lineWidth = line.width,
+                offset = offset,
+                measure = env.measure,
+            )
+        }
+        for (circle in env.circles) {
+            canvas.polygons.drawCircle(
+                color = circle.color,
+                pointCenter = circle.pointCenter,
+                radius = circle.radius,
+                edgeCount = 16,
+                lineWidth = 0.1,
+                offset = offset,
+                measure = env.measure,
+            )
+        }
+        val dotSize = sizeOf(0.2, 0.2)
+        for (dot in env.dots) {
+            canvas.polygons.drawRectangle(
+                color = dot.color,
+                pointTopLeft = dot.point,
+                size = dotSize,
+                offset = offset - dotSize.center(),
+                measure = env.measure,
+            )
+        }
         val centerOffset = engine.property.pictureSize.center() - env.measure
         onRenderCamera(
             canvas = canvas,
             offset = centerOffset,
             measure = env.measure,
         )
-        if (engine.input.keyboard.isPressed(KeyboardButton.I)) {
+        if (env.debug) {
             onRenderGrid(
                 canvas = canvas,
                 offset = offset,
@@ -403,11 +441,75 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     mass = 1.0,
                 ),
             )
+            val cs = Circle(
+                pointCenter = pointOf(0, 0),
+                radius = 2.0,
+                color = Color.WHITE,
+            )
+            val ct = Circle(
+                pointCenter = pointOf(8, 4),
+                radius = 2.0,
+                color = Color.GRAY,
+            )
+            val c1 = Circle(
+                pointCenter = pointOf(11, 1),
+                radius = 3.0,
+                color = Color.YELLOW,
+            )
+            val d1 = Dot(
+                point = (cs.pointCenter + ct.pointCenter).getPerpendicular(c1.pointCenter),
+                color = Color.YELLOW,
+            )
+            val c1d1 = distanceOf(c1.pointCenter, d1.point)
+            val c1cf = c1.radius + cs.radius
+            val d1cf = kotlin.math.sqrt(c1cf * c1cf - c1d1 * c1d1)
+            val cf = Circle(
+                pointCenter = d1.point.moved(length = d1cf, angle = angleOf(d1.point, cs.pointCenter)),
+                color = Color.WHITE,
+                radius = cs.radius,
+            )
+            val lines = listOf(
+                Line(
+                    vector = cs.pointCenter + ct.pointCenter,
+                    color = Color.GRAY.copy(alpha = 0.5f),
+                    width = 0.05,
+                ),
+                Line(
+                    vector = c1.pointCenter + d1.point,
+                    color = Color.YELLOW.copy(alpha = 0.5f),
+                    width = 0.05,
+                ),
+            )
+            val circles = listOf(cs, ct, c1, cf)
+            val dots = listOf(
+                Dot(
+                    point = cs.pointCenter,
+                    color = Color.WHITE,
+                ),
+                Dot(
+                    point = c1.pointCenter,
+                    color = Color.YELLOW,
+                ),
+                Dot(
+                    point = ct.pointCenter,
+                    color = Color.GRAY.copy(alpha = 0.5f),
+                ),
+                d1,
+                Dot(
+                    point = cf.pointCenter,
+                    color = Color.WHITE,
+                ),
+            )
             return Environment(
                 measure = measure,
                 camera = camera,
-                bodies = bodies,
+                bodies = emptyList(),
+//                bodies = bodies,
                 paused = true,
+                debug = false,
+                lines = lines,
+                circles = circles,
+                dots = dots,
             )
         }
 
