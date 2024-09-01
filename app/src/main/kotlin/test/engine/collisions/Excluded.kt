@@ -4,6 +4,7 @@ import org.lwjgl.opengl.GL11
 import sp.kx.lwjgl.entity.Color
 import sp.kx.lwjgl.entity.PolygonDrawer
 import sp.kx.lwjgl.opengl.GLUtil
+import sp.kx.math.MutablePoint
 import sp.kx.math.Offset
 import sp.kx.math.Point
 import sp.kx.math.Size
@@ -17,8 +18,11 @@ import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.sizeOf
 import sp.kx.math.toString
+import test.engine.collisions.entity.Moving
+import test.engine.collisions.entity.MutableMoving
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Deprecated(message = "sp.kx.math.minus")
@@ -187,4 +191,38 @@ internal fun PolygonDrawer.drawCircle(
         }
         GLUtil.vertexOfMoved(fStart, length = lineWidth / 2, angle = angleOf(fStart, fFinish) - kotlin.math.PI / 2, offset = offset, measure = measure)
     }
+}
+
+@Deprecated("sp.kx.math.mut")
+internal fun Point.mut(): MutablePoint {
+    return MutablePoint(
+        x = x,
+        y = y,
+    )
+}
+
+@Deprecated("sp.kx.math.measure.mut")
+internal fun Speed.mut(): MutableSpeed {
+    return MutableSpeed(magnitude = per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
+}
+
+@Deprecated("sp.kx.math.measure.set")
+internal fun MutableSpeed.set(other: Speed) {
+    set(magnitude = other.per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
+}
+
+@Deprecated("sp.kx.math")
+internal fun MutableMoving.set(other: Moving) {
+    point.set(other.point)
+    speed.set(other.speed)
+}
+
+@Deprecated("sp.kx.math.measure.time")
+internal fun Speed.duration(length: Double): Duration {
+    return (length / per(TimeUnit.NANOSECONDS)).nanoseconds
+}
+
+@Deprecated("sp.kx.math.measure.set")
+internal fun MutableAcceleration.set(other: Acceleration) {
+    return set(magnitude = other.per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
 }

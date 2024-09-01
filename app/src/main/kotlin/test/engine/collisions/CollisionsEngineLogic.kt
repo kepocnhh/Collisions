@@ -22,8 +22,10 @@ import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
 import sp.kx.math.measure.MutableSpeed
+import sp.kx.math.measure.Speed
 import sp.kx.math.measure.diff
 import sp.kx.math.measure.isEmpty
+import sp.kx.math.measure.speedOf
 import sp.kx.math.minus
 import sp.kx.math.moved
 import sp.kx.math.offsetOf
@@ -38,9 +40,12 @@ import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Circle
 import test.engine.collisions.entity.Dot
 import test.engine.collisions.entity.Line
+import test.engine.collisions.entity.Moving
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
 
 internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
     private val env = getEnvironment()
@@ -79,33 +84,81 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         )
     }
 
+    private fun findConflict(
+        bodies: List<Body>,
+        targets: Map<Int, Moving>,
+        minDistance: Double,
+    ): Pair<Body, Body>? {
+        for (i in bodies.indices) {
+            val bi = bodies[i]
+            val mi = targets[i] ?: bi.moving
+            for (j in bodies.indices) {
+                if (i == j) continue
+                val bj = bodies[j]
+                val mj = targets[j] ?: bj.moving
+                val distance = distanceOf(mi.point, mj.point)
+                if (distance < minDistance * 2) return bi to bj
+            }
+        }
+        return null
+    }
+
+    private fun getTarget(body: Body, timeDiff: Duration): MutableMoving {
+        val d = body.acceleration.speed(timeDiff, TimeUnit.NANOSECONDS)
+        val v0 = body.moving.speed.per(TimeUnit.NANOSECONDS)
+        val v = kotlin.math.max(v0 + d, 0.0)
+        if (v == 0.0) return MutableMoving(
+            point = body.moving.point.mut(),
+            speed = body.moving.speed.mut(),
+        )
+        val speed = MutableSpeed(v, TimeUnit.NANOSECONDS)
+        return MutableMoving(
+            point = body.moving.point.moved(
+                length = speed.length(timeDiff),
+                angle = body.direction,
+            ).mut(),
+            speed = speed,
+        )
+    }
+
+    private fun getNewSpeed(m1: Moving, m2: Moving): Speed {
+        val v1 = m1.speed.per(TimeUnit.NANOSECONDS)
+        val v2 = m2.speed.per(TimeUnit.NANOSECONDS)
+        return speedOf(magnitude = 2 * v2 + v1, TimeUnit.NANOSECONDS)
+    }
+
     private fun moveBodies(bodies: List<Body>) {
         val timeDiff = engine.property.time.diff()
-        for (index in bodies.indices) {
-            val body = bodies[index]
-            // a = (v - v0) / t
-            // v = a * t + v0
-            val d = body.acceleration.speed(timeDiff, TimeUnit.NANOSECONDS)
-            val v0 = body.moving.speed.per(TimeUnit.NANOSECONDS)
-//            println("$index] v0: " + v0.toString(points = 6))
-//            println("$index] d: " + d.toString(points = 6))
-            val v = kotlin.math.max(v0 + d, 0.0)
-            if (v == 0.0) {
-                body.moving.speed.clear()
-                body.acceleration.clear() // todo
-                continue
-            }
-            body.moving.speed.set(v, TimeUnit.NANOSECONDS)
-            val length = body.moving.speed.length(timeDiff)
-            println("$index] length: $length")
-            println("$index] before: ${body.moving.point}")
-            val target = body.moving.point.moved(
-                length = length,
-                angle = body.direction,
-            )
-            println("$index] after: $target")
-            body.moving.point.set(target)
+        if (bodies.size != 2) TODO("moveBodies($bodies)")
+        val (b1, b2) = bodies
+        val b1Target = getTarget(body = b1, timeDiff = timeDiff)
+        val b2Target = getTarget(body = b2, timeDiff = timeDiff)
+        val minDistance = 1.0
+        if (distanceOf(b1Target.point, b2Target.point) < minDistance * 2) {
+            val d1 = (b1.moving.point + b1Target.point).getPerpendicular(b2Target.point)
+            val b2d1 = distanceOf(b2Target.point, d1)
+            val b2b1f = minDistance * 2
+            val d1b1f = kotlin.math.sqrt(b2b1f * b2b1f - b2d1 * b2d1)
+            //
+            // b1               b1f      b1t  b2/d1
+            // *----------------*--------*----*
+            //
+            val b1f = d1.moved(length = d1b1f, angle = angleOf(d1, b1.moving.point))
+            //              |- - - - | dTime
+            // | - - - - - - - - - - | timeDiff
+            // *------------*--------*
+            val dTime = timeDiff - b1.moving.speed.duration(length = distanceOf(b1.moving.point, b1f))
+            //
+            val v1 = getNewSpeed(m1 = b1Target, m2 = b2Target)
+            val v2 = getNewSpeed(m1 = b2Target, m2 = b1Target)
+            b1Target.point.set(b1f)
+            b1Target.speed.set(v1)
+            b2Target.speed.set(v2)
+            b1.direction = b1.direction + kotlin.math.PI // todo
+            b2.acceleration.set(b1.acceleration) // todo
         }
+        b1.moving.set(b1Target)
+        b2.moving.set(b2Target)
     }
 
     private fun onRenderBodies(
@@ -425,9 +478,9 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 Body(
                     moving = MutableMoving(
                         point = MutablePoint(x = -4.0, y = 0.0),
-                        speed = MutableSpeed(magnitude = 1.0, timeUnit = TimeUnit.SECONDS),
+                        speed = MutableSpeed(magnitude = 3.0, timeUnit = TimeUnit.SECONDS),
                     ),
-                    acceleration = MutableAcceleration(magnitude = -0.1, timeUnit = TimeUnit.SECONDS),
+                    acceleration = MutableAcceleration(magnitude = -0.25, timeUnit = TimeUnit.SECONDS),
                     direction = 0.0,
                     mass = 1.0,
                 ),
@@ -503,13 +556,16 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             return Environment(
                 measure = measure,
                 camera = camera,
-                bodies = emptyList(),
-//                bodies = bodies,
+//                bodies = emptyList(),
+                bodies = bodies,
                 paused = true,
                 debug = false,
-                lines = lines,
-                circles = circles,
-                dots = dots,
+                lines = emptyList(),
+//                lines = lines,
+                circles = emptyList(),
+//                circles = circles,
+                dots = emptyList(),
+//                dots = dots,
             )
         }
 

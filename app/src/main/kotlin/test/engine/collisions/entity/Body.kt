@@ -1,6 +1,5 @@
 package test.engine.collisions.entity
 
-import sp.kx.math.measure.MutableSpeed
 import test.engine.collisions.MutableAcceleration
 
 internal class Body(
