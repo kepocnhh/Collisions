@@ -215,6 +215,7 @@ internal fun MutableSpeed.set(other: Speed) {
 internal fun MutableMoving.set(other: Moving) {
     point.set(other.point)
     speed.set(other.speed)
+    direction = other.direction
 }
 
 @Deprecated("sp.kx.math.measure.time")

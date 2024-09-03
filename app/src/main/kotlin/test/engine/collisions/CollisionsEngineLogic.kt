@@ -11,6 +11,8 @@ import sp.kx.math.MutableOffset
 import sp.kx.math.MutablePoint
 import sp.kx.math.Offset
 import sp.kx.math.Point
+import sp.kx.math.Vector
+import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
@@ -19,6 +21,7 @@ import sp.kx.math.getPerpendicular
 import sp.kx.math.getShortestPoint
 import sp.kx.math.gt
 import sp.kx.math.isEmpty
+import sp.kx.math.length
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
 import sp.kx.math.measure.MutableSpeed
@@ -35,6 +38,7 @@ import sp.kx.math.radians
 import sp.kx.math.sizeOf
 import sp.kx.math.toOffset
 import sp.kx.math.toString
+import sp.kx.math.toVector
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Circle
@@ -107,24 +111,85 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         val d = body.acceleration.speed(timeDiff, TimeUnit.NANOSECONDS)
         val v0 = body.moving.speed.per(TimeUnit.NANOSECONDS)
         val v = kotlin.math.max(v0 + d, 0.0)
-        if (v == 0.0) return MutableMoving(
+        if (v0 == 0.0 && v == 0.0) return MutableMoving(
             point = body.moving.point.mut(),
             speed = body.moving.speed.mut(),
+            direction = 0.0,
         )
+        val lStart = body.moving.speed.length(timeDiff)
         val speed = MutableSpeed(v, TimeUnit.NANOSECONDS)
+        val lFinish = speed.length(timeDiff)
         return MutableMoving(
             point = body.moving.point.moved(
-                length = speed.length(timeDiff),
-                angle = body.direction,
+                length = (lStart + lFinish) / 2,
+                angle = body.moving.direction,
             ).mut(),
             speed = speed,
+            direction = body.moving.direction,
         )
     }
 
-    private fun getNewSpeed(m1: Moving, m2: Moving): Speed {
+    private fun setNewSpeedV1(m1: MutableMoving, m2: Moving) {
+        val angle = angleOf(m1.point, m2.point)
+        m1.direction = kotlin.math.PI / 2 - angle
         val v1 = m1.speed.per(TimeUnit.NANOSECONDS)
         val v2 = m2.speed.per(TimeUnit.NANOSECONDS)
-        return speedOf(magnitude = 2 * v2 + v1, TimeUnit.NANOSECONDS)
+        val mass = 1.0 // todo
+        val magnitude = (2 * mass * v2 + v1 * (mass - mass)) / (mass + mass)
+        m1.speed.set(magnitude, TimeUnit.NANOSECONDS)
+    }
+
+    private fun getVelocity(
+        fi: Double,
+        a1: Double,
+        a2: Double,
+        v1: Double,
+        v2: Double,
+        m1: Double,
+        m2: Double,
+        point: Point,
+    ): Vector {
+        val v11 = v1 * kotlin.math.cos(a1 - fi) * (m1 - m2)
+        val v12 = 2 * m2 * v2 * kotlin.math.cos(a2 - fi)
+        val v13 = (v11 + v12) / (m1 + m2)
+        val v14 = v1 * kotlin.math.sin(a1 - fi)
+        val v1x = v13 * kotlin.math.cos(fi) + v14 * kotlin.math.cos(fi + kotlin.math.PI / 2)
+        val v1y = v13 * kotlin.math.sin(fi) + v14 * kotlin.math.sin(fi + kotlin.math.PI / 2)
+        return point.toVector(offsetOf(dX = v1x, dY = v1y))
+    }
+
+    private fun MutableMoving.collide(other: MutableMoving) {
+        val fi = angleOf(this.point, other.point)
+        val a1 = this.direction
+        val a2 = other.direction
+        val v1 = this.speed.per(TimeUnit.NANOSECONDS)
+        val v2 = other.speed.per(TimeUnit.NANOSECONDS)
+        val m1 = 1.0 // todo
+        val m2 = 1.0 // todo
+        val v1v = getVelocity(
+            fi = fi,
+            a1 = a1,
+            a2 = a2,
+            v1 = v1,
+            v2 = v2,
+            m1 = m1,
+            m2 = m2,
+            point = this.point,
+        )
+        this.direction = v1v.angle()
+        this.speed.set(v1v.length(), TimeUnit.NANOSECONDS)
+        val v2v = getVelocity(
+            fi = fi,
+            a1 = a2,
+            a2 = a1,
+            v1 = v2,
+            v2 = v1,
+            m1 = m2,
+            m2 = m1,
+            point = other.point,
+        )
+        other.direction = v2v.angle()
+        other.speed.set(v2v.length(), TimeUnit.NANOSECONDS)
     }
 
     private fun moveBodies(bodies: List<Body>) {
@@ -144,17 +209,13 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             // *----------------*--------*----*
             //
             val b1f = d1.moved(length = d1b1f, angle = angleOf(d1, b1.moving.point))
+            b1Target.point.set(b1f)
             //              |- - - - | dTime
             // | - - - - - - - - - - | timeDiff
             // *------------*--------*
             val dTime = timeDiff - b1.moving.speed.duration(length = distanceOf(b1.moving.point, b1f))
             //
-            val v1 = getNewSpeed(m1 = b1Target, m2 = b2Target)
-            val v2 = getNewSpeed(m1 = b2Target, m2 = b1Target)
-            b1Target.point.set(b1f)
-            b1Target.speed.set(v1)
-            b2Target.speed.set(v2)
-            b1.direction = b1.direction + kotlin.math.PI // todo
+            b1Target.collide(b2Target)
             b2.acceleration.set(b1.acceleration) // todo
         }
         b1.moving.set(b1Target)
@@ -180,6 +241,13 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 offset = offset,
                 measure = measure,
             )
+//            canvas.vectors.draw(
+//                color = Color.WHITE,
+//                vector = body.moving.point + body.moving.point.moved(body.moving.speed.per(TimeUnit.SECONDS), body.moving.direction),
+//                lineWidth = 0.1,
+//                offset = offset,
+//                measure = measure,
+//            )
             canvas.texts.draw(
                 color = Color.BLUE,
                 info = info,
@@ -473,24 +541,25 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             val camera = MutableMoving(
                 point = MutablePoint(x = 0.0, y = 0.0),
                 speed = MutableSpeed(magnitude = 12.0, timeUnit = TimeUnit.SECONDS),
+                direction = 0.0,
             )
             val bodies = listOf(
                 Body(
                     moving = MutableMoving(
-                        point = MutablePoint(x = -4.0, y = 0.0),
-                        speed = MutableSpeed(magnitude = 3.0, timeUnit = TimeUnit.SECONDS),
+                        point = MutablePoint(x = -4.0, y = -1.5),
+                        speed = MutableSpeed(magnitude = 4.0, timeUnit = TimeUnit.SECONDS),
+                        direction = 0.0,
                     ),
-                    acceleration = MutableAcceleration(magnitude = -0.25, timeUnit = TimeUnit.SECONDS),
-                    direction = 0.0,
+                    acceleration = MutableAcceleration(magnitude = -0.5, timeUnit = TimeUnit.SECONDS),
                     mass = 1.0,
                 ),
                 Body(
                     moving = MutableMoving(
                         point = MutablePoint(x = 4.0, y = 0.0),
                         speed = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
+                        direction = 0.0,
                     ),
                     acceleration = MutableAcceleration(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
-                    direction = 0.0,
                     mass = 1.0,
                 ),
             )

@@ -6,4 +6,5 @@ import sp.kx.math.measure.MutableSpeed
 internal class MutableMoving(
     override val point: MutablePoint,
     override val speed: MutableSpeed,
+    override var direction: Double,
 ) : Moving
