@@ -14,7 +14,9 @@ import sp.kx.math.Vector
 import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.distanceOf
+import sp.kx.math.getShortestDistance
 import sp.kx.math.length
+import sp.kx.math.lt
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.Speed
@@ -392,4 +394,17 @@ internal class MutableVelocity : Velocity {
         vector.length()
         offset.set(vector.toOffset())
     }
+}
+
+@Deprecated(message = "sp.kx.math.closerThan")
+internal fun Vector.closerThan(point: Point, minDistance: Double): Boolean {
+    return getShortestDistance(point).lt(other = minDistance, points = 12)
+}
+
+@Deprecated(message = "sp.kx.math.closerThan")
+internal fun Iterable<Vector>.anyCloserThan(point: Point, minDistance: Double): Boolean {
+    for (vector in this) {
+        if (vector.closerThan(point = point, minDistance = minDistance)) return true
+    }
+    return false
 }

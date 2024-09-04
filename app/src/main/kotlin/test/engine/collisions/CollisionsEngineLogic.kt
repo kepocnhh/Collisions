@@ -19,16 +19,11 @@ import sp.kx.math.centerPoint
 import sp.kx.math.distanceOf
 import sp.kx.math.getPerpendicular
 import sp.kx.math.getShortestPoint
-import sp.kx.math.gt
 import sp.kx.math.isEmpty
-import sp.kx.math.length
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
 import sp.kx.math.measure.MutableSpeed
-import sp.kx.math.measure.Speed
 import sp.kx.math.measure.diff
-import sp.kx.math.measure.isEmpty
-import sp.kx.math.measure.speedOf
 import sp.kx.math.minus
 import sp.kx.math.moved
 import sp.kx.math.offsetOf
@@ -36,23 +31,15 @@ import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.radians
 import sp.kx.math.sizeOf
-import sp.kx.math.toOffset
-import sp.kx.math.toString
-import sp.kx.math.toVector
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Circle
 import test.engine.collisions.entity.Dot
 import test.engine.collisions.entity.Line
-import test.engine.collisions.entity.Moving
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
-import kotlin.math.PI
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
-import kotlin.time.Duration.Companion.seconds
 
 internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
     private val env = getEnvironment()
@@ -91,93 +78,68 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         )
     }
 
-    private fun getTarget(
-        moving: Moving,
-        acceleration: Acceleration,
-        duration: Duration,
-    ): MutableMoving {
-        val d = acceleration.speed(duration, TimeUnit.NANOSECONDS)
-        val v0 = moving.speed.per(TimeUnit.NANOSECONDS)
-        val v = kotlin.math.max(v0 + d, 0.0)
-        if (v0 == 0.0 && v == 0.0) return MutableMoving(
-            point = moving.point.mut(),
-            speed = moving.speed.mut(),
-            direction = 0.0,
-        )
-        val lStart = moving.speed.length(duration)
-        val speed = MutableSpeed(v, TimeUnit.NANOSECONDS)
-        val lFinish = speed.length(duration)
-        return MutableMoving(
-            point = moving.point.moved(
-                length = (lStart + lFinish) / 2,
-                angle = moving.direction,
-            ).mut(),
-            speed = speed,
-            direction = moving.direction,
-        )
-    }
-
-    private fun setNewSpeedV1(m1: MutableMoving, m2: Moving) {
-        val angle = angleOf(m1.point, m2.point)
-        m1.direction = kotlin.math.PI / 2 - angle
-        val v1 = m1.speed.per(TimeUnit.NANOSECONDS)
-        val v2 = m2.speed.per(TimeUnit.NANOSECONDS)
-        val mass = 1.0 // todo
-        val magnitude = (2 * mass * v2 + v1 * (mass - mass)) / (mass + mass)
-        m1.speed.set(magnitude, TimeUnit.NANOSECONDS)
-    }
-
-    private fun getVelocity(
-        fi: Double,
-        a1: Double,
-        a2: Double,
-        v1: Double,
-        v2: Double,
-        m1: Double,
-        m2: Double,
-        point: Point,
-    ): Vector {
-        val v11 = v1 * kotlin.math.cos(a1 - fi) * (m1 - m2)
-        val v12 = 2 * m2 * v2 * kotlin.math.cos(a2 - fi)
-        val v13 = (v11 + v12) / (m1 + m2)
-        val v14 = v1 * kotlin.math.sin(a1 - fi)
-        val v1x = v13 * kotlin.math.cos(fi) + v14 * kotlin.math.cos(fi + kotlin.math.PI / 2)
-        val v1y = v13 * kotlin.math.sin(fi) + v14 * kotlin.math.sin(fi + kotlin.math.PI / 2)
-        return point.toVector(offsetOf(dX = v1x, dY = v1y))
-    }
-
-    private fun MutableMoving.collide(other: MutableMoving) {
-        val fi = angleOf(this.point, other.point)
-        val a1 = this.direction
-        val a2 = other.direction
-        val v1 = this.speed.per(TimeUnit.NANOSECONDS)
-        val v2 = other.speed.per(TimeUnit.NANOSECONDS)
-        val m1 = 1.0 // todo
-        val m2 = 1.0 // todo
-        val v1v = getVelocity(
-            fi = fi,
-            a1 = a1,
-            a2 = a2,
-            v1 = v1,
-            v2 = v2,
-            m1 = m1,
-            m2 = m2,
-            point = this.point,
-        )
-        this.direction = v1v.angle()
-        this.speed.set(v1v.length(), TimeUnit.NANOSECONDS)
-        val v2v = getVelocity(
-            fi = fi,
-            a1 = a2,
-            a2 = a1,
-            v1 = v2,
-            v2 = v1,
-            m1 = m2,
-            m2 = m1,
-            point = other.point,
-        )
-        other.direction = v2v.angle()
-        other.speed.set(v2v.length(), TimeUnit.NANOSECONDS)
+    private fun getFinalPoint(
+        current: Point,
+        target: Point,
+        minDistance: Double,
+        vectors: List<Vector>,
+        angle: Double,
+    ): Pair<Point, Double>? {
+        val targetDistance = distanceOf(current, target)
+        val nearest = vectors.filter { vector ->
+            vector.closerThan(point = current, minDistance = targetDistance + minDistance)
+        }
+        val anyCloser = nearest.anyCloserThan(point = target, minDistance = minDistance)
+        if (!anyCloser) return target to angle
+        val correctedPoints = nearest.map { vector ->
+            val tp = vector.getPerpendicular(target = target)
+            val cp = vector.getPerpendicular(target = current)
+//            val ft = tp.moved(length = minDistance, angle = angleOf(tp, target))
+//            val ct = tp.moved(length = distanceOf(cp, current), angle = angleOf(tp, target))
+//            val fc = cp.moved(length = minDistance, angle = angleOf(cp, current))
+//            val ct_t = distanceOf(ct, target)
+//            val ct_c = distanceOf(ct, current)
+//            val c_t = distanceOf(current, target)
+//            val ft_t = distanceOf(ft, target)
+            val ft_t = minDistance - distanceOf(tp, target)
+            // ct_c / ft_f = ct_t / ft_t
+            // ft_f = ft_t * ct_c / ct_t
+//            val ft_f = ft_t * ct_c / ct_t
+//            val f = ft.moved(length = ft_f, angleOf(tp, cp))
+            val at = angleOf(tp, target)
+//            val f = target.moved(length = ft_t * 2, angle = at)
+            val tf = tp.moved(length = minDistance, angle = angleOf(cp, current))
+            val f = tf.moved(length = distanceOf(target, tf), angle = angleOf(cp, current))
+            val av = vector.angle()
+            val ac = angleOf(current, target)
+//            val ad = ac - av
+            val af = 2 * av - ac
+            val message = """
+                vector: %.1f/%.1f -> %.1f/%.1f
+                target: %.1f/%.1f
+                final: %.1f/%.1f
+                angle:transform: %.4f
+                angle:current: %.4f
+                angle:final: %.4f
+                ft_t: %.12f
+            """.trimIndent()
+            println(String.format(message, vector.start.x, vector.start.y, vector.finish.x, vector.finish.y, target.x, target.y, f.x, f.y, at, angle, af, ft_t)) // todo
+            vector to f
+//            vector to getCorrectedPoint(
+//                minDistance = minDistance,
+//                target = target,
+//                point = vector.getShortestPoint(target = target),
+//            )
+        }
+        val (vector, point) = correctedPoints.filter { (_, point) ->
+            !nearest.anyCloserThan(point = point, minDistance = minDistance)
+        }.maxByOrNull { (_, point) ->
+            distanceOf(current, point)
+        } ?: return null
+        val av = vector.angle()
+        val ac = angleOf(current, target)
+        val af = 2 * av - ac
+        return point to af
     }
 
     private fun moveBodies(bodies: List<Body>) {
@@ -188,89 +150,31 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
         val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
         val vs = b1.velocity.scalar(TimeUnit.NANOSECONDS)
-        val ps = vs * b1.mass
+//        val ps = vs * b1.mass
+//        val tf = (ps / Ff).nanoseconds
         val tf = (vs * b1.mass / Ff).nanoseconds
-        // |    | tx
-        // |         | tf
-        // *----*----*
-//        val tx = timeDiff
         val tx = kotlin.math.min(timeDiff.inWholeNanoseconds, tf.inWholeNanoseconds).nanoseconds
-        /*
-        if (tf < tx) {
-            val sf = vs * tf.inWholeNanoseconds
-            b1.point.move(length = sf, angle = b1.velocity.angle())
+        //
+//        val px = ps - Ff * tx.inWholeNanoseconds
+//        val px = vs * b1.mass - Ff * tx.inWholeNanoseconds
+//        val vx = px / b1.mass
+        val vx = vs - Ff * tx.inWholeNanoseconds / b1.mass
+        val s = (vs + vx) * tx.inWholeNanoseconds / 2
+//        b1.point.move(length = s, angle = b1.velocity.angle())
+        val finalPoint = getFinalPoint(
+            current = b1.point,
+            target = b1.point.moved(length = s, angle = b1.velocity.angle()),
+            minDistance = 1.0,
+            vectors = env.walls,
+            angle = b1.velocity.angle(),
+        )
+        if (finalPoint == null) {
             b1.velocity.clear()
         } else {
-            val px = (ps - Ff * tx.inWholeNanoseconds)
-            val vx = px / b1.mass
-            val s = (vs * tx.inWholeNanoseconds + vx * tx.inWholeNanoseconds) / 2
-            b1.point.move(length = s, angle = b1.velocity.angle())
-            b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS)
+            b1.point.set(finalPoint.first)
+            b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS, angle = finalPoint.second)
         }
-        */
-        //
-        val px = ps - Ff * tx.inWholeNanoseconds
-        val vx = px / b1.mass
-        val s = (vs + vx) * tx.inWholeNanoseconds / 2
-        b1.point.move(length = s, angle = b1.velocity.angle())
-        b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS)
-        //
-        // vx = px / m
-        //
-//        val vx = px.speed(TimeUnit.NANOSECONDS, mass = b1.mass)
-//        val s = (vs * tx.inWholeNanoseconds + vx * tx.inWholeNanoseconds) / 2
-//        b1.point.move(length = s, angle = b1.momentum.angle())
-//        b1.momentum.set(px)
-        //
-        // vx^2 = vs^2 + 2 * a * s
-        // a = (vx + vs) / 2 * tx
-        // s = (vx^2 - vs^2) / (2 * a)
-        // s = (vx^2 - vs^2) * tx / (2 * ((vx + vs) / 2 * tx))
-        // s = (vx^2 - vs^2) * tx / (vx + vs) / tx
-        // todo
     }
-
-    /*
-    private fun moveBodies(bodies: List<Body>) {
-        val timeDiff = engine.property.time.diff()
-        if (bodies.size != 2) TODO("moveBodies($bodies)")
-        val (b1, b2) = bodies
-        val b1Target = getTarget(
-            moving = b1.moving,
-            acceleration = b1.acceleration,
-            duration = timeDiff,
-        )
-        val b2Target = getTarget(
-            moving = b2.moving,
-            acceleration = b2.acceleration,
-            duration = timeDiff,
-        )
-        val minDistance = 1.0
-        if (distanceOf(b1Target.point, b2Target.point) < minDistance * 2) {
-            val d1 = (b1.moving.point + b1Target.point).getPerpendicular(b2Target.point)
-            val b2d1 = distanceOf(b2Target.point, d1)
-            val b2b1f = minDistance * 2
-            val d1b1f = kotlin.math.sqrt(b2b1f * b2b1f - b2d1 * b2d1)
-            //
-            // b1               b1f      b1t  b2/d1
-            // *----------------*--------*----*
-            //
-            val b1f = d1.moved(length = d1b1f, angle = angleOf(d1, b1.moving.point))
-            b1Target.point.set(b1f)
-            //              |- - - - | dTime
-            // | - - - - - - - - - - | timeDiff
-            // *------------*--------*
-            val dTime = timeDiff - b1.moving.speed.duration(length = distanceOf(b1.moving.point, b1f))
-            //
-            b1Target.collide(b2Target)
-            b2.acceleration.set(b1.acceleration) // todo
-            b1Target.set(getTarget(b1Target, b1.acceleration, dTime))
-            b2Target.set(getTarget(b2Target, b2.acceleration, dTime))
-        }
-        b1.moving.set(b1Target)
-        b2.moving.set(b2Target)
-    }
-    */
 
     private fun onRenderBodies(
         canvas: Canvas,
@@ -332,18 +236,18 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         measure: Measure<Double, Double>,
     ) {
         canvas.vectors.draw(
-            color = Color.WHITE,
-            vector = vectorOf(-0.5, 0.0, 0.5, 0.0),
+            color = Color.WHITE.copy(alpha = 0.5f),
+            vector = vectorOf(-0.25, 0.0, 0.25, 0.0),
             offset = offset,
             measure = measure,
-            lineWidth = 0.1,
+            lineWidth = 0.05,
         )
         canvas.vectors.draw(
-            color = Color.WHITE,
-            vector = vectorOf(0.0, -0.5, 0.0, 0.5),
+            color = Color.WHITE.copy(alpha = 0.5f),
+            vector = vectorOf(0.0, -0.25, 0.0, 0.25),
             offset = offset,
             measure = measure,
-            lineWidth = 0.1,
+            lineWidth = 0.05,
         )
 //        val info = FontInfoUtil.getFontInfo(height = 0.75, measure = measure)
 //        canvas.texts.draw(
@@ -601,8 +505,8 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     companion object {
         private fun getEnvironment(): Environment {
-            val measure = MutableDoubleMeasure(16.0)
-//            val measure = MutableDoubleMeasure(24.0)
+//            val measure = MutableDoubleMeasure(16.0)
+            val measure = MutableDoubleMeasure(24.0)
             val camera = MutableMoving(
                 point = MutablePoint(x = 0.0, y = 0.0),
                 speed = MutableSpeed(magnitude = 12.0, timeUnit = TimeUnit.SECONDS),
@@ -610,11 +514,11 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             )
             val bodies = listOf(
                 Body(
-                    point = MutablePoint(x = -4.0, y = -1.5),
+                    point = MutablePoint(x = 0.0, y = 0.5),
                     velocity = MutableVelocity(
-                        magnitude = 4.0,
+                        magnitude = 8.0,
                         timeUnit = TimeUnit.SECONDS,
-                        angle = PI / 9,
+                        angle = kotlin.math.PI / 4,
                     ),
                     mass = 1.0,
                 ),
@@ -627,65 +531,96 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 //                    mass = 1.0,
 //                ),
             )
-            val cs = Circle(
-                pointCenter = pointOf(0, 0),
-                radius = 2.0,
+            val dc = Dot(
+//                point = pointOf(2, 4),
+                point = pointOf(9.0, 2.5),
                 color = Color.WHITE,
             )
-            val ct = Circle(
-                pointCenter = pointOf(8, 4),
-                radius = 2.0,
+            val line = Line(
+//                vector = vectorOf(startX = -2, startY = -4, finishX = -2, finishY = 4),
+//                vector = vectorOf(startX = 10, startY = -10, finishX = 10, finishY = 10),
+                vector = vectorOf(startX = 10, startY = 10, finishX = 10, finishY = -10),
+                color = Color.WHITE,
+                width = 0.1,
+            )
+            val dcp = Dot(
+                point = line.vector.getPerpendicular(dc.point),
                 color = Color.GRAY,
             )
-            val c1 = Circle(
-                pointCenter = pointOf(11, 1),
-                radius = 3.0,
-                color = Color.YELLOW,
+            val minDistance = 1.0
+            val dcf = Dot(
+                point = dcp.point.moved(length = minDistance, angle = angleOf(dcp.point, dc.point)),
+                color = Color.GRAY,
             )
-            val d1 = Dot(
-                point = (cs.pointCenter + ct.pointCenter).getPerpendicular(c1.pointCenter),
-                color = Color.YELLOW,
+            val ac = -0.7854
+            val dt = Dot(
+                point = dc.point.moved(length = 0.5, angle = ac),
+                color = Color.RED,
             )
-            val c1d1 = distanceOf(c1.pointCenter, d1.point)
-            val c1cf = c1.radius + cs.radius
-            val d1cf = kotlin.math.sqrt(c1cf * c1cf - c1d1 * c1d1)
-            val cf = Circle(
-                pointCenter = d1.point.moved(length = d1cf, angle = angleOf(d1.point, cs.pointCenter)),
+            val dtp = Dot(
+                point = line.vector.getPerpendicular(dt.point),
+                color = Color.GRAY,
+            )
+            val dtf = Dot(
+                point = dtp.point.moved(length = minDistance, angle = angleOf(dcp.point, dc.point)),
                 color = Color.WHITE,
-                radius = cs.radius,
             )
+            val df = Dot(
+                point = dtf.point.moved(length = distanceOf(dt.point, dtf.point), angle = angleOf(dcp.point, dc.point)),
+                color = Color.GREEN,
+            )
+            val av = line.vector.angle()
+//            val ac = angleOf(dc.point, dt.point)
+            val ad = ac - av
+//            val af = av - ad
+            val af = 2 * av - ac
             val lines = listOf(
+                line,
                 Line(
-                    vector = cs.pointCenter + ct.pointCenter,
-                    color = Color.GRAY.copy(alpha = 0.5f),
+                    vector = dc.point + dt.point,
+                    color = Color.GRAY,
                     width = 0.05,
                 ),
                 Line(
-                    vector = c1.pointCenter + d1.point,
+                    vector = dt.point + dt.point.moved(length = 8.0, angle = af),
                     color = Color.YELLOW.copy(alpha = 0.5f),
                     width = 0.05,
                 ),
-            )
-            val circles = listOf(cs, ct, c1, cf)
-            val dots = listOf(
-                Dot(
-                    point = cs.pointCenter,
-                    color = Color.WHITE,
+                Line(
+                    vector = df.point + df.point.moved(length = 8.0, angle = af + kotlin.math.PI),
+                    color = Color.YELLOW.copy(alpha = 0.5f),
+                    width = 0.05,
                 ),
-                Dot(
-                    point = c1.pointCenter,
-                    color = Color.YELLOW,
-                ),
-                Dot(
-                    point = ct.pointCenter,
+                Line(
+                    vector = dtf.point + dcf.point,
                     color = Color.GRAY.copy(alpha = 0.5f),
+                    width = 0.05,
                 ),
-                d1,
+            )
+            val dots = listOf(
+                dc,
+                dcp,
+                dcf,
+                dt,
+                dtp,
+                dtf,
+                df,
                 Dot(
-                    point = cf.pointCenter,
+                    point = line.vector.start,
+                    color = Color.WHITE,
+                ),
+                Dot(
+                    point = line.vector.finish,
                     color = Color.WHITE,
                 ),
             )
+            val message = """
+                av: %.4f
+                ac: %.4f
+                ad: %.4f
+                af: %.4f
+            """.trimIndent()
+            println(String.format(message, av, ac, ad, af)) // todo
             val walls = listOf(
                 pointOf(-10, -10) + pointOf(-10, 10),
                 pointOf(-10, 10) + pointOf(10, 10),
@@ -699,12 +634,13 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 bodies = bodies,
                 paused = true,
                 debug = false,
-                lines = emptyList(),
-//                lines = lines,
+//                lines = emptyList(),
+                lines = lines,
                 circles = emptyList(),
 //                circles = circles,
-                dots = emptyList(),
-//                dots = dots,
+//                dots = emptyList(),
+                dots = dots,
+//                walls = emptyList(),
                 walls = walls,
             )
         }
