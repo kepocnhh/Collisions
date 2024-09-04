@@ -39,6 +39,7 @@ import test.engine.collisions.entity.Line
 import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 
 internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
@@ -102,42 +103,9 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         val correctedPoints = nearest.map { vector ->
             val tp = vector.getPerpendicular(target = target)
             val cp = vector.getPerpendicular(target = current)
-//            val ft = tp.moved(length = minDistance, angle = angleOf(tp, target))
-//            val ct = tp.moved(length = distanceOf(cp, current), angle = angleOf(tp, target))
-//            val fc = cp.moved(length = minDistance, angle = angleOf(cp, current))
-//            val ct_t = distanceOf(ct, target)
-//            val ct_c = distanceOf(ct, current)
-//            val c_t = distanceOf(current, target)
-//            val ft_t = distanceOf(ft, target)
-            val ft_t = minDistance - distanceOf(tp, target)
-            // ct_c / ft_f = ct_t / ft_t
-            // ft_f = ft_t * ct_c / ct_t
-//            val ft_f = ft_t * ct_c / ct_t
-//            val f = ft.moved(length = ft_f, angleOf(tp, cp))
-            val at = angleOf(tp, target)
-//            val f = target.moved(length = ft_t * 2, angle = at)
             val tf = tp.moved(length = minDistance, angle = angleOf(cp, current))
             val f = tf.moved(length = distanceOf(target, tf), angle = angleOf(cp, current))
-            val av = vector.angle()
-            val ac = angleOf(current, target)
-//            val ad = ac - av
-            val af = 2 * av - ac
-            val message = """
-                vector: %.1f/%.1f -> %.1f/%.1f
-                target: %.1f/%.1f
-                final: %.1f/%.1f
-                angle:transform: %.4f
-                angle:current: %.4f
-                angle:final: %.4f
-                ft_t: %.12f
-            """.trimIndent()
-            println(String.format(message, vector.start.x, vector.start.y, vector.finish.x, vector.finish.y, target.x, target.y, f.x, f.y, at, angle, af, ft_t)) // todo
             vector to f
-//            vector to getCorrectedPoint(
-//                minDistance = minDistance,
-//                target = target,
-//                point = vector.getShortestPoint(target = target),
-//            )
         }
         val (vector, point) = correctedPoints.filter { (_, point) ->
             !nearest.anyCloserThan(point = point, minDistance = minDistance)
@@ -152,23 +120,14 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     private fun moveBodies(bodies: List<Body>) {
         val timeDiff = engine.property.time.diff()
-        if (bodies.size != 1) TODO("moveBodies($bodies)")
-        val (b1) = bodies
-        // https://en.wikipedia.org/wiki/Gram is a unit of mass in the International System of Units (SI) equal to one thousandth of a kilogram
-        // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
-        val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
+        if (bodies.size != 2) TODO("moveBodies($bodies)")
+        val (b1, b2) = bodies
+        val Ff = env.Ff
         val vs = b1.velocity.scalar(TimeUnit.NANOSECONDS)
-//        val ps = vs * b1.mass
-//        val tf = (ps / Ff).nanoseconds
         val tf = (vs * b1.mass / Ff).nanoseconds
         val tx = kotlin.math.min(timeDiff.inWholeNanoseconds, tf.inWholeNanoseconds).nanoseconds
-        //
-//        val px = ps - Ff * tx.inWholeNanoseconds
-//        val px = vs * b1.mass - Ff * tx.inWholeNanoseconds
-//        val vx = px / b1.mass
         val vx = vs - Ff * tx.inWholeNanoseconds / b1.mass
         val s = (vs + vx) * tx.inWholeNanoseconds / 2
-//        b1.point.move(length = s, angle = b1.velocity.angle())
         val finalPoint = getFinalPoint(
             current = b1.point,
             target = b1.point.moved(length = s, angle = b1.velocity.angle()),
@@ -210,13 +169,15 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 offset = offset,
                 measure = measure,
             )
-            canvas.vectors.draw(
-                color = Color.YELLOW,
-                vector = body.point + body.point.moved(length = 1.0, angle = angleOf(env.camera.point, body.point)),
-                lineWidth = 0.1,
-                offset = offset,
-                measure = measure,
-            )
+            if (index == 0) {
+                canvas.vectors.draw(
+                    color = Color.YELLOW,
+                    vector = body.point + body.point.moved(length = 1.0, angle = angleOf(env.camera.point, body.point)),
+                    lineWidth = 0.1,
+                    offset = offset,
+                    measure = measure,
+                )
+            }
             canvas.texts.draw(
                 color = Color.BLUE,
                 info = info,
@@ -421,13 +382,10 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 ),
                 measure = measure,
             )
-            // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
-            val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
             listOf(
                 body.velocity.scalar(TimeUnit.SECONDS) to "speed: %.1f per seconds",
                 body.velocity.scalar(TimeUnit.NANOSECONDS) to "speed: %.12f per ns",
                 body.velocity.angle() to "direction: %.1f",
-                Ff to "Ff: %.32f",
             ).forEach { (value: Double, format: String) ->
                 canvas.texts.draw(
                     color = Color.GREEN,
@@ -537,18 +495,18 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 //                    ),
                     velocity = MutableVelocity(
                         magnitude = 0.0,
-                        timeUnit = TimeUnit.SECONDS,
+                        timeUnit = TimeUnit.NANOSECONDS,
                     ),
                     mass = 1.0,
                 ),
-//                Body(
-//                    point = MutablePoint(x = 4.0, y = 0.0),
-//                    velocity = MutableVelocity(
-//                        magnitude = 0.0,
-//                        timeUnit = TimeUnit.SECONDS,
-//                    ),
-//                    mass = 1.0,
-//                ),
+                Body(
+                    point = MutablePoint(x = 4.0, y = -6.0),
+                    velocity = MutableVelocity(
+                        magnitude = 0.0,
+                        timeUnit = TimeUnit.NANOSECONDS,
+                    ),
+                    mass = 1.0,
+                ),
             )
             val dc = Dot(
 //                point = pointOf(2, 4),
@@ -661,6 +619,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 //                dots = dots,
 //                walls = emptyList(),
                 walls = walls,
+                Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1)),
             )
         }
 

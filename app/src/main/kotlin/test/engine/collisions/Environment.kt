@@ -18,4 +18,7 @@ internal class Environment(
     val circles: List<Circle>,
     val dots: List<Dot>,
     val walls: List<Vector>,
+    // https://en.wikipedia.org/wiki/Gram is a unit of mass in the International System of Units (SI) equal to one thousandth of a kilogram
+    // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
+    val Ff: Double,
 )
