@@ -4,6 +4,7 @@ import org.lwjgl.opengl.GL11
 import sp.kx.lwjgl.entity.Color
 import sp.kx.lwjgl.entity.PolygonDrawer
 import sp.kx.lwjgl.opengl.GLUtil
+import sp.kx.math.MutableOffset
 import sp.kx.math.MutablePoint
 import sp.kx.math.MutableVector
 import sp.kx.math.Offset
@@ -12,6 +13,7 @@ import sp.kx.math.Size
 import sp.kx.math.Vector
 import sp.kx.math.angle
 import sp.kx.math.angleOf
+import sp.kx.math.distanceOf
 import sp.kx.math.length
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableSpeed
@@ -249,7 +251,7 @@ internal fun Vector.mut(): MutableVector {
     )
 }
 
-@Deprecated("sp.kx.math.measure.Momentum")
+@Deprecated("sp.kx.math.measure.MutableMomentum")
 internal class MutableMomentum : Momentum {
     private val vector: MutableVector
 
@@ -312,5 +314,82 @@ internal class MutableMomentum : Momentum {
                 angle = other.angle(),
             ),
         )
+    }
+}
+
+@Deprecated("sp.kx.physics.Velocity")
+internal interface Velocity {
+    fun scalar(timeUnit: TimeUnit): Double
+    fun angle(): Double
+}
+
+@Deprecated("sp.kx.math.toOffset")
+internal fun Vector.toOffset(): Offset {
+    return offsetOf(
+        dX = finish.x - start.x,
+        dY = finish.y - start.y,
+    )
+}
+
+@Deprecated("sp.kx.math.mut")
+internal fun Offset.mut(): MutableOffset {
+    return MutableOffset(
+        dX = dX,
+        dY = dY,
+    )
+}
+
+@Deprecated("sp.kx.physics.MutableVelocity")
+internal class MutableVelocity : Velocity {
+    private val offset: MutableOffset
+
+    constructor(
+        magnitude: Double,
+        timeUnit: TimeUnit,
+        angle: Double = 0.0, // todo
+    ) {
+        val vector = vectorOf(
+            Point.Center,
+            length = magnitude / timeUnit.toNanos(1),
+            angle = angle,
+        )
+        vector.length()
+        offset = vector.toOffset().mut()
+    }
+
+    override fun scalar(timeUnit: TimeUnit): Double {
+        return distanceOf(offset) * timeUnit.toNanos(1)
+    }
+
+    override fun angle(): Double {
+        return angleOf(offset)
+    }
+
+    fun clear() {
+        offset.set(dX = 0.0, dY = 0.0)
+    }
+
+    fun set(
+        magnitude: Double,
+        timeUnit: TimeUnit,
+        angle: Double = angle(),
+    ) {
+        val vector = vectorOf(
+            Point.Center,
+            length = magnitude / timeUnit.toNanos(1),
+            angle = angle,
+        )
+        vector.length()
+        offset.set(vector.toOffset())
+    }
+
+    fun set(other: Velocity) {
+        val vector = vectorOf(
+            Point.Center,
+            length = other.scalar(TimeUnit.NANOSECONDS),
+            angle = other.angle(),
+        )
+        vector.length()
+        offset.set(vector.toOffset())
     }
 }
