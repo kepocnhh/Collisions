@@ -341,6 +341,14 @@ internal fun Offset.mut(): MutableOffset {
     )
 }
 
+@Deprecated("sp.kx.math.add")
+internal fun MutableOffset.add(other: Offset) {
+    set(
+        dX = dX + other.dX,
+        dY = dY + other.dY,
+    )
+}
+
 @Deprecated("sp.kx.physics.MutableVelocity")
 internal class MutableVelocity : Velocity {
     private val offset: MutableOffset
@@ -381,8 +389,20 @@ internal class MutableVelocity : Velocity {
             length = magnitude / timeUnit.toNanos(1),
             angle = angle,
         )
-        vector.length()
         offset.set(vector.toOffset())
+    }
+
+    fun add(
+        magnitude: Double,
+        timeUnit: TimeUnit,
+        angle: Double = angle(),
+    ) {
+        val vector = vectorOf(
+            Point.Center,
+            length = magnitude / timeUnit.toNanos(1),
+            angle = angle,
+        )
+        offset.add(vector.toOffset())
     }
 
     fun set(other: Velocity) {
@@ -391,7 +411,6 @@ internal class MutableVelocity : Velocity {
             length = other.scalar(TimeUnit.NANOSECONDS),
             angle = other.angle(),
         )
-        vector.length()
         offset.set(vector.toOffset())
     }
 }
@@ -408,3 +427,6 @@ internal fun Iterable<Vector>.anyCloserThan(point: Point, minDistance: Double): 
     }
     return false
 }
+
+// todo angle vector x perpendicular
+// todo angle vector x vector

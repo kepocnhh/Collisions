@@ -56,6 +56,14 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 }
                 KeyboardButton.Q -> env.paused = !env.paused
                 KeyboardButton.I -> env.debug = !env.debug
+                KeyboardButton.B -> if (!env.paused) {
+                    val body = env.bodies.firstOrNull() ?: TODO()
+                    body.velocity.add(
+                        magnitude = 4.0,
+                        timeUnit = TimeUnit.SECONDS,
+                        angle = angleOf(env.camera.point, body.point),
+                    )
+                }
                 else -> Unit
             }
         }
@@ -196,8 +204,15 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 measure = measure,
             )
             canvas.vectors.draw(
-                color = Color.WHITE,
+                color = Color.GRAY.copy(alpha = 0.5f),
                 vector = body.point + body.point.moved(body.velocity.scalar(TimeUnit.SECONDS), body.velocity.angle()),
+                lineWidth = 0.05,
+                offset = offset,
+                measure = measure,
+            )
+            canvas.vectors.draw(
+                color = Color.YELLOW,
+                vector = body.point + body.point.moved(length = 1.0, angle = angleOf(env.camera.point, body.point)),
                 lineWidth = 0.1,
                 offset = offset,
                 measure = measure,
@@ -505,8 +520,8 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     companion object {
         private fun getEnvironment(): Environment {
-//            val measure = MutableDoubleMeasure(16.0)
-            val measure = MutableDoubleMeasure(24.0)
+            val measure = MutableDoubleMeasure(16.0)
+//            val measure = MutableDoubleMeasure(24.0)
             val camera = MutableMoving(
                 point = MutablePoint(x = 0.0, y = 0.0),
                 speed = MutableSpeed(magnitude = 12.0, timeUnit = TimeUnit.SECONDS),
@@ -514,11 +529,15 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             )
             val bodies = listOf(
                 Body(
-                    point = MutablePoint(x = 0.0, y = 0.5),
+                    point = MutablePoint(x = 0.0, y = 0.0),
+//                    velocity = MutableVelocity(
+//                        magnitude = 8.0,
+//                        timeUnit = TimeUnit.SECONDS,
+//                        angle = kotlin.math.PI / 4,
+//                    ),
                     velocity = MutableVelocity(
-                        magnitude = 8.0,
+                        magnitude = 0.0,
                         timeUnit = TimeUnit.SECONDS,
-                        angle = kotlin.math.PI / 4,
                     ),
                     mass = 1.0,
                 ),
@@ -634,12 +653,12 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 bodies = bodies,
                 paused = true,
                 debug = false,
-//                lines = emptyList(),
-                lines = lines,
+                lines = emptyList(),
+//                lines = lines,
                 circles = emptyList(),
 //                circles = circles,
-//                dots = emptyList(),
-                dots = dots,
+                dots = emptyList(),
+//                dots = dots,
 //                walls = emptyList(),
                 walls = walls,
             )
