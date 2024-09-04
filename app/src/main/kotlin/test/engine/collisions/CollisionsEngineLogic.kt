@@ -107,25 +107,29 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         return null
     }
 
-    private fun getTarget(body: Body, timeDiff: Duration): MutableMoving {
-        val d = body.acceleration.speed(timeDiff, TimeUnit.NANOSECONDS)
-        val v0 = body.moving.speed.per(TimeUnit.NANOSECONDS)
+    private fun getTarget(
+        moving: Moving,
+        acceleration: Acceleration,
+        duration: Duration,
+    ): MutableMoving {
+        val d = acceleration.speed(duration, TimeUnit.NANOSECONDS)
+        val v0 = moving.speed.per(TimeUnit.NANOSECONDS)
         val v = kotlin.math.max(v0 + d, 0.0)
         if (v0 == 0.0 && v == 0.0) return MutableMoving(
-            point = body.moving.point.mut(),
-            speed = body.moving.speed.mut(),
+            point = moving.point.mut(),
+            speed = moving.speed.mut(),
             direction = 0.0,
         )
-        val lStart = body.moving.speed.length(timeDiff)
+        val lStart = moving.speed.length(duration)
         val speed = MutableSpeed(v, TimeUnit.NANOSECONDS)
-        val lFinish = speed.length(timeDiff)
+        val lFinish = speed.length(duration)
         return MutableMoving(
-            point = body.moving.point.moved(
+            point = moving.point.moved(
                 length = (lStart + lFinish) / 2,
-                angle = body.moving.direction,
+                angle = moving.direction,
             ).mut(),
             speed = speed,
-            direction = body.moving.direction,
+            direction = moving.direction,
         )
     }
 
@@ -196,8 +200,16 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         val timeDiff = engine.property.time.diff()
         if (bodies.size != 2) TODO("moveBodies($bodies)")
         val (b1, b2) = bodies
-        val b1Target = getTarget(body = b1, timeDiff = timeDiff)
-        val b2Target = getTarget(body = b2, timeDiff = timeDiff)
+        val b1Target = getTarget(
+            moving = b1.moving,
+            acceleration = b1.acceleration,
+            duration = timeDiff,
+        )
+        val b2Target = getTarget(
+            moving = b2.moving,
+            acceleration = b2.acceleration,
+            duration = timeDiff,
+        )
         val minDistance = 1.0
         if (distanceOf(b1Target.point, b2Target.point) < minDistance * 2) {
             val d1 = (b1.moving.point + b1Target.point).getPerpendicular(b2Target.point)
@@ -217,6 +229,8 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             //
             b1Target.collide(b2Target)
             b2.acceleration.set(b1.acceleration) // todo
+            b1Target.set(getTarget(b1Target, b1.acceleration, dTime))
+            b2Target.set(getTarget(b2Target, b2.acceleration, dTime))
         }
         b1.moving.set(b1Target)
         b2.moving.set(b2Target)
@@ -241,13 +255,13 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 offset = offset,
                 measure = measure,
             )
-//            canvas.vectors.draw(
-//                color = Color.WHITE,
-//                vector = body.moving.point + body.moving.point.moved(body.moving.speed.per(TimeUnit.SECONDS), body.moving.direction),
-//                lineWidth = 0.1,
-//                offset = offset,
-//                measure = measure,
-//            )
+            canvas.vectors.draw(
+                color = Color.WHITE,
+                vector = body.moving.point + body.moving.point.moved(body.moving.speed.per(TimeUnit.SECONDS), body.moving.direction),
+                lineWidth = 0.1,
+                offset = offset,
+                measure = measure,
+            )
             canvas.texts.draw(
                 color = Color.BLUE,
                 info = info,
@@ -463,6 +477,20 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 ),
                 measure = measure,
             )
+            canvas.texts.draw(
+                color = Color.GREEN,
+                info = info,
+                pointTopLeft = pointOf(
+                    x = 4.0,
+                    y = 2.0 + y++,
+                ),
+                text = String.format(
+                    "    direction: ${body.moving.direction.toString(points = 6)}",
+                    body.moving.point.x,
+                    body.moving.point.y,
+                ),
+                measure = measure,
+            )
         }
     }
 
@@ -548,7 +576,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     moving = MutableMoving(
                         point = MutablePoint(x = -4.0, y = -1.5),
                         speed = MutableSpeed(magnitude = 4.0, timeUnit = TimeUnit.SECONDS),
-                        direction = 0.0,
+                        direction = kotlin.math.PI / 9,
                     ),
                     acceleration = MutableAcceleration(magnitude = -0.5, timeUnit = TimeUnit.SECONDS),
                     mass = 1.0,
