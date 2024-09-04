@@ -182,8 +182,8 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     private fun moveBodies(bodies: List<Body>) {
         val timeDiff = engine.property.time.diff()
-        if (bodies.size != 2) TODO("moveBodies($bodies)")
-        val (b1, b2) = bodies
+        if (bodies.size != 1) TODO("moveBodies($bodies)")
+        val (b1) = bodies
         // https://en.wikipedia.org/wiki/Gram is a unit of mass in the International System of Units (SI) equal to one thousandth of a kilogram
         // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
         val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
@@ -193,7 +193,9 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         // |    | tx
         // |         | tf
         // *----*----*
-        val tx = timeDiff
+//        val tx = timeDiff
+        val tx = kotlin.math.min(timeDiff.inWholeNanoseconds, tf.inWholeNanoseconds).nanoseconds
+        /*
         if (tf < tx) {
             val sf = vs * tf.inWholeNanoseconds
             b1.point.move(length = sf, angle = b1.velocity.angle())
@@ -205,6 +207,14 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             b1.point.move(length = s, angle = b1.velocity.angle())
             b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS)
         }
+        */
+        //
+        val px = ps - Ff * tx.inWholeNanoseconds
+        val vx = px / b1.mass
+        val s = (vs + vx) * tx.inWholeNanoseconds / 2
+        b1.point.move(length = s, angle = b1.velocity.angle())
+        b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS)
+        //
         // vx = px / m
         //
 //        val vx = px.speed(TimeUnit.NANOSECONDS, mass = b1.mass)
@@ -295,6 +305,23 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 offset = offset + offsetOf(dX = -0.5, dY = -0.5),
                 measure = measure,
                 text = String.format("%02d", index),
+            )
+        }
+    }
+
+    private fun onRenderWalls(
+        canvas: Canvas,
+        offset: Offset,
+        measure: Measure<Double, Double>,
+        walls: List<Vector>,
+    ) {
+        for (wall in walls) {
+            canvas.vectors.draw(
+                color = Color.GRAY,
+                vector = wall,
+                lineWidth = 0.1,
+                offset = offset,
+                measure = measure,
             )
         }
     }
@@ -542,6 +569,12 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 measure = env.measure,
             )
         }
+        onRenderWalls(
+            canvas = canvas,
+            offset = offset,
+            measure = env.measure,
+            walls = env.walls,
+        )
         val centerOffset = engine.property.pictureSize.center() - env.measure
         onRenderCamera(
             canvas = canvas,
@@ -568,7 +601,8 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     companion object {
         private fun getEnvironment(): Environment {
-            val measure = MutableDoubleMeasure(24.0)
+            val measure = MutableDoubleMeasure(16.0)
+//            val measure = MutableDoubleMeasure(24.0)
             val camera = MutableMoving(
                 point = MutablePoint(x = 0.0, y = 0.0),
                 speed = MutableSpeed(magnitude = 12.0, timeUnit = TimeUnit.SECONDS),
@@ -584,14 +618,14 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     ),
                     mass = 1.0,
                 ),
-                Body(
-                    point = MutablePoint(x = 4.0, y = 0.0),
-                    velocity = MutableVelocity(
-                        magnitude = 0.0,
-                        timeUnit = TimeUnit.SECONDS,
-                    ),
-                    mass = 1.0,
-                ),
+//                Body(
+//                    point = MutablePoint(x = 4.0, y = 0.0),
+//                    velocity = MutableVelocity(
+//                        magnitude = 0.0,
+//                        timeUnit = TimeUnit.SECONDS,
+//                    ),
+//                    mass = 1.0,
+//                ),
             )
             val cs = Circle(
                 pointCenter = pointOf(0, 0),
@@ -652,6 +686,12 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                     color = Color.WHITE,
                 ),
             )
+            val walls = listOf(
+                pointOf(-10, -10) + pointOf(-10, 10),
+                pointOf(-10, 10) + pointOf(10, 10),
+                pointOf(10, 10) + pointOf(10, -10),
+                pointOf(10, -10) + pointOf(-10, -10),
+            )
             return Environment(
                 measure = measure,
                 camera = camera,
@@ -665,6 +705,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 //                circles = circles,
                 dots = emptyList(),
 //                dots = dots,
+                walls = walls,
             )
         }
 

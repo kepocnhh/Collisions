@@ -1,5 +1,6 @@
 package test.engine.collisions
 
+import sp.kx.math.Vector
 import sp.kx.math.measure.MutableDoubleMeasure
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Circle
@@ -16,4 +17,5 @@ internal class Environment(
     val lines: List<Line>,
     val circles: List<Circle>,
     val dots: List<Dot>,
+    val walls: List<Vector>,
 )
