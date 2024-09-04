@@ -5,10 +5,14 @@ import sp.kx.lwjgl.entity.Color
 import sp.kx.lwjgl.entity.PolygonDrawer
 import sp.kx.lwjgl.opengl.GLUtil
 import sp.kx.math.MutablePoint
+import sp.kx.math.MutableVector
 import sp.kx.math.Offset
 import sp.kx.math.Point
 import sp.kx.math.Size
+import sp.kx.math.Vector
+import sp.kx.math.angle
 import sp.kx.math.angleOf
+import sp.kx.math.length
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.Speed
@@ -18,6 +22,8 @@ import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.sizeOf
 import sp.kx.math.toString
+import sp.kx.math.toVector
+import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Moving
 import test.engine.collisions.entity.MutableMoving
 import java.util.concurrent.TimeUnit
@@ -226,4 +232,85 @@ internal fun Speed.duration(length: Double): Duration {
 @Deprecated("sp.kx.math.measure.set")
 internal fun MutableAcceleration.set(other: Acceleration) {
     return set(magnitude = other.per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
+}
+
+@Deprecated("sp.kx.math.measure.Momentum")
+internal interface Momentum {
+    fun scalar(timeUnit: TimeUnit): Double
+    fun speed(timeUnit: TimeUnit, mass: Double): Double
+    fun angle(): Double
+}
+
+@Deprecated("sp.kx.math.mut")
+internal fun Vector.mut(): MutableVector {
+    return MutableVector(
+        start = start.mut(),
+        finish = finish.mut(),
+    )
+}
+
+@Deprecated("sp.kx.math.measure.Momentum")
+internal class MutableMomentum : Momentum {
+    private val vector: MutableVector
+
+    constructor(
+        speed: Double,
+        timeUnit: TimeUnit,
+        mass: Double = 1.0, // todo
+        angle: Double = 0.0, // todo
+    ) {
+        this.vector = vectorOf(
+            Point.Center,
+            length = mass * speed / timeUnit.toNanos(1),
+            angle = angle,
+        ).mut()
+    }
+
+    constructor(
+        magnitude: Double,
+        timeUnit: TimeUnit,
+        angle: Double = 0.0, // todo
+    ) {
+        this.vector = vectorOf(
+            Point.Center,
+            length = magnitude / timeUnit.toNanos(1),
+            angle = angle,
+        ).mut()
+    }
+
+    override fun scalar(timeUnit: TimeUnit): Double {
+        return vector.length() * timeUnit.toNanos(1)
+    }
+
+    override fun speed(timeUnit: TimeUnit, mass: Double): Double {
+        return vector.length() * timeUnit.toNanos(1) / mass
+    }
+
+    override fun angle(): Double {
+        return vector.angle()
+    }
+
+    fun set(
+        magnitude: Double,
+        timeUnit: TimeUnit,
+        angle: Double = angle(),
+    ) {
+        vector.set(
+            other = vectorOf(
+                Point.Center,
+                length = magnitude / timeUnit.toNanos(1),
+                angle = angle,
+            ),
+        )
+    }
+
+    fun set(other: Momentum) {
+        vector.set(
+            other = vectorOf(
+                Point.Center,
+                length = other.scalar(TimeUnit.NANOSECONDS) / TimeUnit.NANOSECONDS.toNanos(1),
+                angle = other.angle(),
+            ),
+        )
+    }
 }

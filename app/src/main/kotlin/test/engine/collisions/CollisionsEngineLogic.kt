@@ -49,7 +49,9 @@ import test.engine.collisions.entity.MutableMoving
 import test.engine.collisions.util.FontInfoUtil
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.Duration.Companion.seconds
 
 internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
     private val env = getEnvironment()
@@ -86,25 +88,6 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             length = length * multiplier,
             angle = angleOf(offset).radians(),
         )
-    }
-
-    private fun findConflict(
-        bodies: List<Body>,
-        targets: Map<Int, Moving>,
-        minDistance: Double,
-    ): Pair<Body, Body>? {
-        for (i in bodies.indices) {
-            val bi = bodies[i]
-            val mi = targets[i] ?: bi.moving
-            for (j in bodies.indices) {
-                if (i == j) continue
-                val bj = bodies[j]
-                val mj = targets[j] ?: bj.moving
-                val distance = distanceOf(mi.point, mj.point)
-                if (distance < minDistance * 2) return bi to bj
-            }
-        }
-        return null
     }
 
     private fun getTarget(
@@ -200,6 +183,55 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         val timeDiff = engine.property.time.diff()
         if (bodies.size != 2) TODO("moveBodies($bodies)")
         val (b1, b2) = bodies
+        // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
+        val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
+        val ps = b1.momentum
+        // pf - ps = (F - Ff) * ts + (-Ff) * tf
+        // ts = 0    pf = 0    Ff = 1    vf = 0
+        // tf = ps / Ff
+        val tf = (ps.scalar(TimeUnit.NANOSECONDS) / Ff).nanoseconds
+        // vs = ps / m
+        val vs = ps.speed(TimeUnit.NANOSECONDS, mass = b1.mass)
+        // |    | tx
+        // |         | tf
+        // *----*----*
+        val tx = timeDiff
+        if (tf < tx) {
+            val sf = vs * tf.inWholeNanoseconds
+            b1.point.move(length = sf, angle = b1.momentum.angle())
+            b1.momentum.set(magnitude = 0.0, timeUnit = TimeUnit.NANOSECONDS, angle = 0.0)
+        } else {
+            // px = ps - Ff * tx
+            val px = MutableMomentum(
+                magnitude = ps.scalar(TimeUnit.NANOSECONDS) - Ff * tx.inWholeNanoseconds,
+                timeUnit = TimeUnit.NANOSECONDS,
+                angle = ps.angle(),
+            )
+            val vx = px.speed(TimeUnit.NANOSECONDS, mass = b1.mass)
+            val s = (vs * tx.inWholeNanoseconds + vx * tx.inWholeNanoseconds) / 2
+            b1.point.move(length = s, angle = b1.momentum.angle())
+            b1.momentum.set(px)
+        }
+        // vx = px / m
+        //
+//        val vx = px.speed(TimeUnit.NANOSECONDS, mass = b1.mass)
+//        val s = (vs * tx.inWholeNanoseconds + vx * tx.inWholeNanoseconds) / 2
+//        b1.point.move(length = s, angle = b1.momentum.angle())
+//        b1.momentum.set(px)
+        //
+        // vx^2 = vs^2 + 2 * a * s
+        // a = (vx + vs) / 2 * tx
+        // s = (vx^2 - vs^2) / (2 * a)
+        // s = (vx^2 - vs^2) * tx / (2 * ((vx + vs) / 2 * tx))
+        // s = (vx^2 - vs^2) * tx / (vx + vs) / tx
+        // todo
+    }
+
+    /*
+    private fun moveBodies(bodies: List<Body>) {
+        val timeDiff = engine.property.time.diff()
+        if (bodies.size != 2) TODO("moveBodies($bodies)")
+        val (b1, b2) = bodies
         val b1Target = getTarget(
             moving = b1.moving,
             acceleration = b1.acceleration,
@@ -235,6 +267,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         b1.moving.set(b1Target)
         b2.moving.set(b2Target)
     }
+    */
 
     private fun onRenderBodies(
         canvas: Canvas,
@@ -248,7 +281,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             canvas.polygons.drawCircle(
                 borderColor = Color.BLUE,
                 fillColor = Color.BLUE.copy(alpha = 0.5f),
-                pointCenter = body.moving.point,
+                pointCenter = body.point,
                 radius = 1.0,
                 lineWidth = 0.1,
                 edgeCount = 16,
@@ -257,7 +290,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             )
             canvas.vectors.draw(
                 color = Color.WHITE,
-                vector = body.moving.point + body.moving.point.moved(body.moving.speed.per(TimeUnit.SECONDS), body.moving.direction),
+                vector = body.point + body.point.moved(body.momentum.speed(TimeUnit.SECONDS, body.mass), body.momentum.angle()),
                 lineWidth = 0.1,
                 offset = offset,
                 measure = measure,
@@ -265,7 +298,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             canvas.texts.draw(
                 color = Color.BLUE,
                 info = info,
-                pointTopLeft = body.moving.point,
+                pointTopLeft = body.point,
                 offset = offset + offsetOf(dX = -0.5, dY = -0.5),
                 measure = measure,
                 text = String.format("%02d", index),
@@ -444,53 +477,43 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 ),
                 text = String.format(
                     "Body #$index: x %.1f y %.1f",
-                    body.moving.point.x,
-                    body.moving.point.y,
+                    body.point.x,
+                    body.point.y,
                 ),
                 measure = measure,
             )
-            canvas.texts.draw(
-                color = Color.GREEN,
-                info = info,
-                pointTopLeft = pointOf(
-                    x = 4.0,
-                    y = 2.0 + y++,
-                ),
-                text = String.format(
-                    "    speed: ${body.moving.speed}",
-                    body.moving.point.x,
-                    body.moving.point.y,
-                ),
-                measure = measure,
+            // todo Force Friction 1 Newton https://en.wikipedia.org/wiki/Newton_(unit)
+            val Ff = 1.0 / (TimeUnit.SECONDS.toNanos(1) * TimeUnit.SECONDS.toNanos(1))
+            val tx = 16.milliseconds
+            val tf = (body.momentum.scalar(TimeUnit.NANOSECONDS) / Ff).nanoseconds
+//            val tf = ps.scalar(TimeUnit.NANOSECONDS) / Ff
+            val px = MutableMomentum(
+                magnitude = body.momentum.scalar(TimeUnit.NANOSECONDS) - Ff * tx.inWholeNanoseconds,
+                timeUnit = TimeUnit.NANOSECONDS,
+                angle = body.momentum.angle(),
             )
-            canvas.texts.draw(
-                color = Color.GREEN,
-                info = info,
-                pointTopLeft = pointOf(
-                    x = 4.0,
-                    y = 2.0 + y++,
-                ),
-                text = String.format(
-                    "    acceleration: ${body.acceleration}",
-                    body.moving.point.x,
-                    body.moving.point.y,
-                ),
-                measure = measure,
-            )
-            canvas.texts.draw(
-                color = Color.GREEN,
-                info = info,
-                pointTopLeft = pointOf(
-                    x = 4.0,
-                    y = 2.0 + y++,
-                ),
-                text = String.format(
-                    "    direction: ${body.moving.direction.toString(points = 6)}",
-                    body.moving.point.x,
-                    body.moving.point.y,
-                ),
-                measure = measure,
-            )
+            listOf(
+                body.momentum.scalar(TimeUnit.SECONDS) to "momentum: %.1f per seconds",
+                body.momentum.scalar(TimeUnit.NANOSECONDS) to "momentum: %.12f per ns",
+                body.momentum.speed(TimeUnit.SECONDS, mass = body.mass) to "speed: %.1f per seconds",
+                body.momentum.angle() to "direction: %.1f",
+                Ff to "Ff: %.32f",
+                (tx.inWholeNanoseconds.toDouble() / 1_000_000_000) to "tx: %.12f seconds",
+                (tf.inWholeNanoseconds.toDouble() / 1_000_000_000) to "tf: %.12f seconds",
+//                tf to "tf: %.12f",
+                px.scalar(TimeUnit.SECONDS) to "px: %.32f per seconds",
+            ).forEach { (value: Double, format: String) ->
+                canvas.texts.draw(
+                    color = Color.GREEN,
+                    info = info,
+                    pointTopLeft = pointOf(
+                        x = 4.0,
+                        y = 2.0 + y++,
+                    ),
+                    text = String.format("    $format", value),
+                    measure = measure,
+                )
+            }
         }
     }
 
@@ -573,21 +596,20 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             )
             val bodies = listOf(
                 Body(
-                    moving = MutableMoving(
-                        point = MutablePoint(x = -4.0, y = -1.5),
-                        speed = MutableSpeed(magnitude = 4.0, timeUnit = TimeUnit.SECONDS),
-                        direction = kotlin.math.PI / 9,
+                    point = MutablePoint(x = -4.0, y = -1.5),
+                    momentum = MutableMomentum(
+                        speed = 4.0,
+                        timeUnit = TimeUnit.SECONDS,
+                        angle = kotlin.math.PI / 9,
                     ),
-                    acceleration = MutableAcceleration(magnitude = -0.5, timeUnit = TimeUnit.SECONDS),
                     mass = 1.0,
                 ),
                 Body(
-                    moving = MutableMoving(
-                        point = MutablePoint(x = 4.0, y = 0.0),
-                        speed = MutableSpeed(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
-                        direction = 0.0,
+                    point = MutablePoint(x = 4.0, y = 0.0),
+                    momentum = MutableMomentum(
+                        speed = 0.0,
+                        timeUnit = TimeUnit.SECONDS,
                     ),
-                    acceleration = MutableAcceleration(magnitude = 0.0, timeUnit = TimeUnit.SECONDS),
                     mass = 1.0,
                 ),
             )
