@@ -15,6 +15,7 @@ import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.distanceOf
 import sp.kx.math.getShortestDistance
+import sp.kx.math.isEmpty
 import sp.kx.math.length
 import sp.kx.math.lt
 import sp.kx.math.measure.Measure
@@ -323,6 +324,7 @@ internal class MutableMomentum : Momentum {
 internal interface Velocity {
     fun scalar(timeUnit: TimeUnit): Double
     fun angle(): Double
+    fun isEmpty(): Boolean
 }
 
 @Deprecated("sp.kx.math.toOffset")
@@ -412,6 +414,10 @@ internal class MutableVelocity : Velocity {
             angle = other.angle(),
         )
         offset.set(vector.toOffset())
+    }
+
+    override fun isEmpty(): Boolean {
+        return offset.isEmpty()
     }
 }
 

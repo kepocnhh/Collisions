@@ -16,8 +16,11 @@ import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
+import sp.kx.math.contains
 import sp.kx.math.distanceOf
+import sp.kx.math.getIntersection
 import sp.kx.math.getPerpendicular
+import sp.kx.math.getShortestDistance
 import sp.kx.math.getShortestPoint
 import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
@@ -31,6 +34,7 @@ import sp.kx.math.plus
 import sp.kx.math.pointOf
 import sp.kx.math.radians
 import sp.kx.math.sizeOf
+import sp.kx.math.toString
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Circle
@@ -89,11 +93,11 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 
     private fun getFinalPoint(
         current: Point,
-        target: Point,
         minDistance: Double,
         vectors: List<Vector>,
-        angle: Double,
+        target: Point,
     ): Pair<Point, Double>? {
+        val angle = angleOf(current, target)
         val targetDistance = distanceOf(current, target)
         val nearest = vectors.filter { vector ->
             vector.closerThan(point = current, minDistance = targetDistance + minDistance)
@@ -118,28 +122,87 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         return point to af
     }
 
+    private class Target(
+        val vx: Double,
+        var start: Point,
+        var finish: Point,
+    )
+
+    private fun getTarget(body: Body, Ff: Double, timeDiff: Duration): Target? {
+        if (body.velocity.isEmpty()) return null
+        val vs = body.velocity.scalar(TimeUnit.NANOSECONDS)
+        val tf = (vs * body.mass / Ff).nanoseconds
+        val tx = timeDiff.coerceAtMost(tf)
+        val vx = vs - Ff * tx.inWholeNanoseconds / body.mass
+        val length = (vs + vx) * tx.inWholeNanoseconds / 2
+        val angle = body.velocity.angle()
+        return Target(
+            vx = vx,
+            start = body.point,
+            finish = body.point.moved(length = length, angle = angle),
+        )
+    }
+
+    private fun getFinalPoint(
+        current: Point,
+        target: Point,
+        minDistance: Double,
+    ): Pair<Point, Double>? {
+        return getFinalPoint(
+            current = current,
+            target = target,
+            minDistance = minDistance,
+            vectors = env.walls,
+        )
+    }
+
+    private fun collide(
+        b1: Body,
+        t1: Target?,
+        b2: Body,
+        t2: Target?,
+        minDistance: Double,
+    ) {
+        if (t1 == null && t2 == null) {
+            // todo
+        } else if (t1 == null) {
+            // todo
+        } else if (t2 == null) {
+            val c = minDistance * 2
+            val sd = getShortestDistance(b1.point, t1.finish, target = b2.point)
+            if (sd > c) return
+            val p = getPerpendicular(b2.point, b = b1.point, c = t1.finish)
+            val a = distanceOf(b2.point, p)
+            val b = kotlin.math.sqrt(c * c - a * a)
+            val bm = p.moved(length = b, angle = angleOf(p, b1.point))
+            val angle = angleOf(bm, b2.point) + kotlin.math.PI / 2
+            val bf = bm.moved(length = distanceOf(bm, t1.finish), angle = angle)
+            t1.start = bm
+            t1.finish = bf
+        } else {
+            // todo
+        }
+    }
+
     private fun moveBodies(bodies: List<Body>) {
         val timeDiff = engine.property.time.diff()
         if (bodies.size != 2) TODO("moveBodies($bodies)")
         val (b1, b2) = bodies
-        val Ff = env.Ff
-        val vs = b1.velocity.scalar(TimeUnit.NANOSECONDS)
-        val tf = (vs * b1.mass / Ff).nanoseconds
-        val tx = kotlin.math.min(timeDiff.inWholeNanoseconds, tf.inWholeNanoseconds).nanoseconds
-        val vx = vs - Ff * tx.inWholeNanoseconds / b1.mass
-        val s = (vs + vx) * tx.inWholeNanoseconds / 2
+        val t1 = getTarget(body = b1, Ff = env.Ff, timeDiff = timeDiff)
+        val t2 = getTarget(body = b2, Ff = env.Ff, timeDiff = timeDiff)
+        val minDistance = 1.0
+        collide(b1 = b1, t1 = t1, b2 = b2, t2 = t2, minDistance = minDistance)
+        if (t1 == null) return
         val finalPoint = getFinalPoint(
-            current = b1.point,
-            target = b1.point.moved(length = s, angle = b1.velocity.angle()),
-            minDistance = 1.0,
-            vectors = env.walls,
-            angle = b1.velocity.angle(),
+            current = t1.start,
+            target = t1.finish,
+            minDistance = minDistance,
         )
         if (finalPoint == null) {
             b1.velocity.clear()
         } else {
             b1.point.set(finalPoint.first)
-            b1.velocity.set(magnitude = vx, TimeUnit.NANOSECONDS, angle = finalPoint.second)
+            b1.velocity.set(magnitude = t1.vx, TimeUnit.NANOSECONDS, angle = finalPoint.second)
         }
     }
 
@@ -609,7 +672,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 camera = camera,
 //                bodies = emptyList(),
                 bodies = bodies,
-                paused = true,
+                paused = false,
                 debug = false,
                 lines = emptyList(),
 //                lines = lines,
