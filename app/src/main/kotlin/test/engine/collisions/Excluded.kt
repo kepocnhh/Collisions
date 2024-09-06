@@ -11,6 +11,7 @@ import sp.kx.math.Offset
 import sp.kx.math.Point
 import sp.kx.math.Size
 import sp.kx.math.Vector
+import sp.kx.math.add
 import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.distanceOf
@@ -22,10 +23,13 @@ import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.Speed
 import sp.kx.math.measure.speedOf
+import sp.kx.math.mut
 import sp.kx.math.offsetOf
 import sp.kx.math.plus
+import sp.kx.math.plusAssign
 import sp.kx.math.pointOf
 import sp.kx.math.sizeOf
+import sp.kx.math.toOffset
 import sp.kx.math.toString
 import sp.kx.math.toVector
 import sp.kx.math.vectorOf
@@ -35,48 +39,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
-
-@Deprecated(message = "sp.kx.math.minus")
-internal operator fun Size.minus(
-    measure: Measure<Double, Double>,
-): Size {
-    return sizeOf(
-        width = measure.units(width),
-        height = measure.units(height),
-    )
-}
-
-@Deprecated(message = "sp.kx.math.minus")
-internal operator fun Point.minus(measure: Measure<Double, Double>): Point {
-    return pointOf(
-        x = measure.units(x),
-        y = measure.units(y),
-    )
-}
-
-@Deprecated(message = "sp.kx.math.minus")
-internal operator fun Offset.minus(measure: Measure<Double, Double>): Offset {
-    return offsetOf(
-        dX = measure.units(dX),
-        dY = measure.units(dY),
-    )
-}
-
-@Deprecated("sp.kx.math.plus")
-internal operator fun Offset.plus(other: Offset): Offset {
-    return offsetOf(
-        dX = dX + other.dX,
-        dY = dY + other.dY,
-    )
-}
-
-@Deprecated("sp.kx.math.minus")
-internal operator fun Offset.minus(other: Offset): Offset {
-    return offsetOf(
-        dX = dX - other.dX,
-        dY = dY - other.dY,
-    )
-}
 
 @Deprecated("sp.kx.math.measure.Acceleration")
 internal interface Acceleration {
@@ -204,14 +166,6 @@ internal fun PolygonDrawer.drawCircle(
     }
 }
 
-@Deprecated("sp.kx.math.mut")
-internal fun Point.mut(): MutablePoint {
-    return MutablePoint(
-        x = x,
-        y = y,
-    )
-}
-
 @Deprecated("sp.kx.math.measure.mut")
 internal fun Speed.mut(): MutableSpeed {
     return MutableSpeed(magnitude = per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
@@ -244,14 +198,6 @@ internal interface Momentum {
     fun scalar(timeUnit: TimeUnit): Double
     fun speed(timeUnit: TimeUnit, mass: Double): Double
     fun angle(): Double
-}
-
-@Deprecated("sp.kx.math.mut")
-internal fun Vector.mut(): MutableVector {
-    return MutableVector(
-        start = start.mut(),
-        finish = finish.mut(),
-    )
 }
 
 @Deprecated("sp.kx.math.measure.MutableMomentum")
@@ -325,38 +271,6 @@ internal interface Velocity {
     fun scalar(timeUnit: TimeUnit): Double
     fun angle(): Double
     fun isEmpty(): Boolean
-}
-
-@Deprecated("sp.kx.math.toOffset")
-internal fun Vector.toOffset(): Offset {
-    return offsetOf(
-        dX = finish.x - start.x,
-        dY = finish.y - start.y,
-    )
-}
-
-@Deprecated("sp.kx.math.mut")
-internal fun Offset.mut(): MutableOffset {
-    return MutableOffset(
-        dX = dX,
-        dY = dY,
-    )
-}
-
-@Deprecated("sp.kx.math.plusAssign")
-internal operator fun MutableOffset.plusAssign(other: Offset) {
-    set(
-        dX = dX + other.dX,
-        dY = dY + other.dY,
-    )
-}
-
-@Deprecated("sp.kx.math.add")
-internal fun MutableOffset.add(dX: Double, dY: Double) {
-    set(
-        dX = this.dX + dX,
-        dY = this.dY + dY,
-    )
 }
 
 @Deprecated("sp.kx.physics.MutableVelocity")

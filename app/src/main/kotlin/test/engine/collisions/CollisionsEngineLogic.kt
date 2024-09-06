@@ -16,13 +16,9 @@ import sp.kx.math.angle
 import sp.kx.math.angleOf
 import sp.kx.math.center
 import sp.kx.math.centerPoint
-import sp.kx.math.contains
 import sp.kx.math.distanceOf
-import sp.kx.math.eq
-import sp.kx.math.getIntersection
 import sp.kx.math.getPerpendicular
 import sp.kx.math.getShortestDistance
-import sp.kx.math.getShortestPoint
 import sp.kx.math.isEmpty
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableDoubleMeasure
@@ -30,6 +26,7 @@ import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.diff
 import sp.kx.math.minus
 import sp.kx.math.moved
+import sp.kx.math.mut
 import sp.kx.math.offsetOf
 import sp.kx.math.plus
 import sp.kx.math.pointOf
@@ -38,7 +35,6 @@ import sp.kx.math.sizeOf
 import sp.kx.math.toString
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Body
-import test.engine.collisions.entity.Circle
 import test.engine.collisions.entity.Dot
 import test.engine.collisions.entity.Line
 import test.engine.collisions.entity.MutableMoving
