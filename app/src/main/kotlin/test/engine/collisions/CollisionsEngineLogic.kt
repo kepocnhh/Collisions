@@ -285,18 +285,18 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             val message = """
                  ->
                 vs1: ${vs.toString(points = 16)}
-                vt1: ${vt.toString(points = 16)}
-                vt2: ${m2.vx.toString(points = 16)}
+                vm1: ${v1.toString(points = 16)}
+                vf1: ${vf.toString(points = 16)}
+                vm2: ${m2.vs.toString(points = 16)}
+                vf2: ${m2.vx.toString(points = 16)}
                 lt: ${lt.toString(points = 8)}
                 lm: ${lm.toString(points = 8)}
                 bd: ${bd.toString(points = 8)}
                 vd: ${vd.toString(points = 16)}
-                vm1: ${v1.toString(points = 16)}
                 tt: ${tt.inWholeNanoseconds}
                 tm: ${tm.inWholeNanoseconds}
                 fi: ${fi.toString(points = 8)}
                 f1: ${f1.toString(points = 8)}
-                vf: ${vf.toString(points = 16)}
                 mt: ${mt.toString(points = 8)}
                 tf: ${tf.toString(points = 8)}
                  <-
