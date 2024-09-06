@@ -343,11 +343,19 @@ internal fun Offset.mut(): MutableOffset {
     )
 }
 
-@Deprecated("sp.kx.math.add")
-internal fun MutableOffset.add(other: Offset) {
+@Deprecated("sp.kx.math.plusAssign")
+internal operator fun MutableOffset.plusAssign(other: Offset) {
     set(
         dX = dX + other.dX,
         dY = dY + other.dY,
+    )
+}
+
+@Deprecated("sp.kx.math.add")
+internal fun MutableOffset.add(dX: Double, dY: Double) {
+    set(
+        dX = this.dX + dX,
+        dY = this.dY + dY,
     )
 }
 
@@ -404,7 +412,15 @@ internal class MutableVelocity : Velocity {
             length = magnitude / timeUnit.toNanos(1),
             angle = angle,
         )
-        offset.add(vector.toOffset())
+        offset += vector.toOffset()
+    }
+
+    fun add(
+        dX: Double,
+        dY: Double,
+        timeUnit: TimeUnit,
+    ) {
+        offset.add(dX = dX / timeUnit.toNanos(1), dY = dY / timeUnit.toNanos(1))
     }
 
     fun set(other: Velocity) {
@@ -414,6 +430,14 @@ internal class MutableVelocity : Velocity {
             angle = other.angle(),
         )
         offset.set(vector.toOffset())
+    }
+
+    fun set(
+        dX: Double,
+        dY: Double,
+        timeUnit: TimeUnit,
+    ) {
+        offset.set(dX = dX / timeUnit.toNanos(1), dY = dY / timeUnit.toNanos(1))
     }
 
     override fun isEmpty(): Boolean {
