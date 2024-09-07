@@ -156,11 +156,12 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
     private fun Velocity.scalar(
         duration: Duration,
         multiplier: Double,
+        timeUnit: TimeUnit,
     ): Double {
         val vs = scalar(TimeUnit.NANOSECONDS)
         val tf = (vs * multiplier).nanoseconds
         val tx = duration.coerceAtMost(tf).inWholeNanoseconds
-        return vs - tx / multiplier
+        return (vs - tx / multiplier) * timeUnit.toNanos(1)
     }
 
     private fun Velocity.length(
@@ -325,6 +326,61 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         mv2.set(magnitude = distanceOf(v2m), angle = angleOf(v2m), timeUnit = TimeUnit.NANOSECONDS)
     }
 
+    private fun collision(
+        p1: Point,
+        pt: Point,
+        p2: Point,
+        minDistance: Double,
+    ): Point? {
+        val c = minDistance * 2
+        val sd = getShortestDistance(p1, pt, target = p2)
+        if (sd > c) return null
+        // p       pt       pm       p1
+        // * - - - *--------*--------*
+        // |
+        // * p2
+        val p = getPerpendicular(p2, b = p1, c = pt)
+        val a = distanceOf(p2, p)
+        val b = kotlin.math.sqrt(c * c - a * a)
+        return p.moved(length = b, angle = angleOf(p, p1))
+    }
+
+    private fun getSpeed(
+        vs: Double,
+        vt: Double,
+        lt: Double,
+        lm: Double,
+    ): Double {
+        // vs      vm      vt
+        // * - - - * - - - *
+        //         lm      lt
+        val bd = lm / lt
+        val vd = vt - vs
+        return vs + vd * bd
+    }
+
+    private fun getDuration(
+        lt: Double,
+        vs: Double,
+        vt: Double,
+    ): Duration {
+        // vs      vt
+        // * - - - *
+        //         lt
+        return ((2 * lt) / (vs + vt)).nanoseconds
+    }
+
+    private fun getDuration(
+        lt: Double,
+        vs: Velocity,
+        vt: Velocity,
+    ): Duration {
+        // vs      vt
+        // * - - - *
+        //         lt
+        return ((2 * lt) / (vs.scalar(TimeUnit.NANOSECONDS) + vt.scalar(TimeUnit.NANOSECONDS))).nanoseconds
+    }
+
     private fun collide(
         b1: Body,
         t1: Target,
@@ -332,23 +388,21 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         t2: Target,
         minDistance: Double,
     ) {
-        val c = minDistance * 2
-        val sd = getShortestDistance(b1.point, t1.finish, target = b2.point)
-        if (sd > c) return
-        val p = getPerpendicular(b2.point, b = b1.point, c = t1.finish)
-        val a = distanceOf(b2.point, p)
-        val b = kotlin.math.sqrt(c * c - a * a)
-        val bm = p.moved(length = b, angle = angleOf(p, b1.point))
+        val bm = collision(
+            p1 = b1.point,
+            pt = t1.finish,
+            p2 = b2.point,
+            minDistance = minDistance,
+        ) ?: return
+        val v1 = getSpeed(
+            vs = b1.velocity.scalar(TimeUnit.NANOSECONDS),
+            vt = t1.velocity.scalar(TimeUnit.NANOSECONDS),
+            lm = distanceOf(b1.point, bm),
+            lt = distanceOf(b1.point, t1.finish),
+        )
+        t1.velocity.set(magnitude = v1, angle = t1.velocity.angle(), timeUnit = TimeUnit.NANOSECONDS)
         val fi = angleOf(bm, b2.point)
         val f1 = angleOf(b1.point, bm)
-        val vs = b1.velocity.scalar(TimeUnit.NANOSECONDS)
-        val lt = distanceOf(b1.point, t1.finish)
-        val lm = distanceOf(b1.point, bm)
-        val bd = lm / lt
-        val vt = t1.velocity.scalar(TimeUnit.NANOSECONDS)
-        val vd = vt - vs
-        val v1 = vs + vd * bd
-        t1.velocity.set(magnitude = v1, angle = t1.velocity.angle(), timeUnit = TimeUnit.NANOSECONDS)
         collide(
             mv1 = t1.velocity,
             m1 = b1.mass,
@@ -357,14 +411,17 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             m2 = b2.mass,
             fi = fi,
         )
-        val tt = t1.tx
-        val tm = ((2 * lm) / (vs + v1)).nanoseconds
+        val duration = t1.tx - getDuration(
+            lt = distanceOf(b1.point, bm),
+            vs = b1.velocity,
+            vt = t1.velocity,
+        )
         t1.start = bm
         t1.finish = move(
             point = bm,
             mass = b1.mass,
             velocity = t1.velocity,
-            duration = tt - tm,
+            duration = duration,
             forces = env.Ff,
         )
         t2.start = b2.point
@@ -372,7 +429,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             point = b2.point,
             mass = b2.mass,
             velocity = t2.velocity,
-            duration = tt - tm,
+            duration = duration,
             forces = env.Ff,
         )
     }
