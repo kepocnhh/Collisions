@@ -1,9 +1,7 @@
 package test.engine.collisions.entity
 
 import sp.kx.math.MutablePoint
-import sp.kx.math.Vector
-import test.engine.collisions.MutableMomentum
-import test.engine.collisions.MutableVelocity
+import sp.kx.physics.MutableVelocity
 
 internal class Body(
     val point: MutablePoint,

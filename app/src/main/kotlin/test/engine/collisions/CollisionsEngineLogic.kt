@@ -34,6 +34,7 @@ import sp.kx.math.radians
 import sp.kx.math.sizeOf
 import sp.kx.math.toString
 import sp.kx.math.vectorOf
+import sp.kx.physics.MutableVelocity
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Dot
 import test.engine.collisions.entity.Line
@@ -188,7 +189,11 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         val length = (vs + vx) * tx.inWholeNanoseconds / 2
         val angle = body.velocity.angle()
         return Target(
-            velocity = MutableVelocity(magnitude = vx, TimeUnit.NANOSECONDS),
+            velocity = MutableVelocity.of(
+                magnitude = vx,
+                angle = 0.0,
+                timeUnit = TimeUnit.NANOSECONDS,
+            ),
             start = body.point.mut(),
             finish = body.point.moved(length = length, angle = angle).mut(),
             tx = tx,
@@ -341,7 +346,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             b1.velocity.clear()
         } else {
             b1.point.set(f1.first)
-            b1.velocity.set(magnitude = t1.velocity.scalar(TimeUnit.NANOSECONDS), TimeUnit.NANOSECONDS, angle = f1.second)
+            b1.velocity.set(magnitude = t1.velocity.scalar(TimeUnit.NANOSECONDS), angle = f1.second, timeUnit = TimeUnit.NANOSECONDS)
         }
         val f2 = getFinalPoint(
             current = t2.start,
@@ -352,7 +357,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             b2.velocity.clear()
         } else {
             b2.point.set(f2.first)
-            b2.velocity.set(magnitude = t2.velocity.scalar(TimeUnit.NANOSECONDS), TimeUnit.NANOSECONDS, angle = f2.second)
+            b2.velocity.set(magnitude = t2.velocity.scalar(TimeUnit.NANOSECONDS), angle = f2.second, timeUnit = TimeUnit.NANOSECONDS)
         }
     }
 
@@ -706,16 +711,18 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
 //                        timeUnit = TimeUnit.SECONDS,
 //                        angle = kotlin.math.PI / 4,
 //                    ),
-                    velocity = MutableVelocity(
+                    velocity = MutableVelocity.of(
                         magnitude = 0.0,
+                        angle = 0.0,
                         timeUnit = TimeUnit.NANOSECONDS,
                     ),
                     mass = 1.0,
                 ),
                 Body(
                     point = MutablePoint(x = 4.0, y = -6.0),
-                    velocity = MutableVelocity(
+                    velocity = MutableVelocity.of(
                         magnitude = 0.0,
+                        angle = 0.0,
                         timeUnit = TimeUnit.NANOSECONDS,
                     ),
                     mass = 1.0,

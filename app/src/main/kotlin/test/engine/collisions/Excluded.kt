@@ -5,40 +5,27 @@ import sp.kx.lwjgl.entity.Color
 import sp.kx.lwjgl.entity.PolygonDrawer
 import sp.kx.lwjgl.opengl.GLUtil
 import sp.kx.math.MutableOffset
-import sp.kx.math.MutablePoint
 import sp.kx.math.MutableVector
 import sp.kx.math.Offset
 import sp.kx.math.Point
-import sp.kx.math.Size
 import sp.kx.math.Vector
-import sp.kx.math.add
 import sp.kx.math.angle
 import sp.kx.math.angleOf
-import sp.kx.math.distanceOf
 import sp.kx.math.getShortestDistance
-import sp.kx.math.isEmpty
 import sp.kx.math.length
 import sp.kx.math.lt
 import sp.kx.math.measure.Measure
 import sp.kx.math.measure.MutableSpeed
 import sp.kx.math.measure.Speed
-import sp.kx.math.measure.speedOf
 import sp.kx.math.mut
-import sp.kx.math.offsetOf
 import sp.kx.math.plus
-import sp.kx.math.plusAssign
-import sp.kx.math.pointOf
-import sp.kx.math.sizeOf
-import sp.kx.math.toOffset
 import sp.kx.math.toString
-import sp.kx.math.toVector
 import sp.kx.math.vectorOf
 import test.engine.collisions.entity.Moving
 import test.engine.collisions.entity.MutableMoving
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
-import kotlin.time.Duration.Companion.seconds
 
 @Deprecated("sp.kx.math.measure.Acceleration")
 internal interface Acceleration {
@@ -266,99 +253,6 @@ internal class MutableMomentum : Momentum {
     }
 }
 
-@Deprecated("sp.kx.physics.Velocity")
-internal interface Velocity {
-    fun scalar(timeUnit: TimeUnit): Double
-    fun angle(): Double
-    fun isEmpty(): Boolean
-}
-
-@Deprecated("sp.kx.physics.MutableVelocity")
-internal class MutableVelocity : Velocity {
-    private val offset: MutableOffset
-
-    constructor(
-        magnitude: Double,
-        timeUnit: TimeUnit,
-        angle: Double = 0.0, // todo
-    ) {
-        val vector = vectorOf(
-            Point.Center,
-            length = magnitude / timeUnit.toNanos(1),
-            angle = angle,
-        )
-        vector.length()
-        offset = vector.toOffset().mut()
-    }
-
-    override fun scalar(timeUnit: TimeUnit): Double {
-        return distanceOf(offset) * timeUnit.toNanos(1)
-    }
-
-    override fun angle(): Double {
-        return angleOf(offset)
-    }
-
-    fun clear() {
-        offset.set(dX = 0.0, dY = 0.0)
-    }
-
-    fun set(
-        magnitude: Double,
-        timeUnit: TimeUnit,
-        angle: Double = angle(),
-    ) {
-        val vector = vectorOf(
-            Point.Center,
-            length = magnitude / timeUnit.toNanos(1),
-            angle = angle,
-        )
-        offset.set(vector.toOffset())
-    }
-
-    fun add(
-        magnitude: Double,
-        timeUnit: TimeUnit,
-        angle: Double = angle(),
-    ) {
-        val vector = vectorOf(
-            Point.Center,
-            length = magnitude / timeUnit.toNanos(1),
-            angle = angle,
-        )
-        offset += vector.toOffset()
-    }
-
-    fun add(
-        dX: Double,
-        dY: Double,
-        timeUnit: TimeUnit,
-    ) {
-        offset.add(dX = dX / timeUnit.toNanos(1), dY = dY / timeUnit.toNanos(1))
-    }
-
-    fun set(other: Velocity) {
-        val vector = vectorOf(
-            Point.Center,
-            length = other.scalar(TimeUnit.NANOSECONDS),
-            angle = other.angle(),
-        )
-        offset.set(vector.toOffset())
-    }
-
-    fun set(
-        dX: Double,
-        dY: Double,
-        timeUnit: TimeUnit,
-    ) {
-        offset.set(dX = dX / timeUnit.toNanos(1), dY = dY / timeUnit.toNanos(1))
-    }
-
-    override fun isEmpty(): Boolean {
-        return offset.isEmpty()
-    }
-}
-
 @Deprecated(message = "sp.kx.math.closerThan")
 internal fun Vector.closerThan(point: Point, minDistance: Double): Boolean {
     return getShortestDistance(point).lt(other = minDistance, points = 12)
@@ -370,6 +264,12 @@ internal fun Iterable<Vector>.anyCloserThan(point: Point, minDistance: Double): 
         if (vector.closerThan(point = point, minDistance = minDistance)) return true
     }
     return false
+}
+
+@Deprecated(message = "sp.kx.math.clear")
+internal fun MutableOffset.clear() {
+    dX = 0.0
+    dY = 0.0
 }
 
 // todo angle vector x perpendicular
