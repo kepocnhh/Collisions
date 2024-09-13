@@ -36,6 +36,8 @@ import sp.kx.math.toString
 import sp.kx.math.vectorOf
 import sp.kx.physics.MutableVelocity
 import sp.kx.physics.Velocity
+import sp.kx.physics.collide
+import sp.kx.physics.getDuration
 import sp.kx.physics.getMiddleSpeed
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Dot
@@ -303,30 +305,6 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         set(magnitude = distanceOf(v2m), angle = angleOf(v2m), timeUnit = TimeUnit.NANOSECONDS)
     }
 
-    private fun collide(
-        mv1: MutableVelocity,
-        m1: Double,
-        f1: Double,
-        mv2: MutableVelocity,
-        m2: Double,
-        fi: Double,
-    ) {
-        val v1 = mv1.scalar(TimeUnit.NANOSECONDS)
-        // todo same masses
-        val v1t = v1 * kotlin.math.cos(f1 - fi) * (m1 - m2)
-        val v1x = v1t * kotlin.math.cos(fi) / (m1 + m2) + v1 * kotlin.math.sin(f1 - fi) * kotlin.math.cos(fi + kotlin.math.PI / 2)
-        val v1y = v1t * kotlin.math.sin(fi) / (m1 + m2) + v1 * kotlin.math.sin(f1 - fi) * kotlin.math.sin(fi + kotlin.math.PI / 2)
-        // todo mut velocity set dX/dY
-        val v1m = offsetOf(dX = v1x, dY = v1y)
-        mv1.set(magnitude = distanceOf(v1m), angle = angleOf(v1m), timeUnit = TimeUnit.NANOSECONDS)
-        val v2t = 2 * m1 * v1 * kotlin.math.cos(f1 - fi)
-        val v2x = v2t * kotlin.math.cos(fi) / (m1 + m2)
-        val v2y = v2t * kotlin.math.sin(fi) / (m1 + m2)
-        // todo mut velocity set dX/dY
-        val v2m = offsetOf(dX = v2x, dY = v2y)
-        mv2.set(magnitude = distanceOf(v2m), angle = angleOf(v2m), timeUnit = TimeUnit.NANOSECONDS)
-    }
-
     private fun collision(
         p1: Point,
         pt: Point,
@@ -364,28 +342,6 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         return (scalar(TimeUnit.NANOSECONDS) - other.scalar(TimeUnit.NANOSECONDS)) * timeUnit.toNanos(1)
     }
 
-    private fun getDuration(
-        lt: Double,
-        vs: Double,
-        vt: Double,
-    ): Duration {
-        // vs      vt
-        // * - - - *
-        //         lt
-        return ((2 * lt) / (vs + vt)).nanoseconds
-    }
-
-    private fun getDuration(
-        lt: Double,
-        vs: Velocity,
-        vt: Velocity,
-    ): Duration {
-        // vs      vt
-        // * - - - *
-        //         lt
-        return ((2 * lt) / (vs.scalar(TimeUnit.NANOSECONDS) + vt.scalar(TimeUnit.NANOSECONDS))).nanoseconds
-    }
-
     private fun collide(
         b1: Body,
         t1: Target,
@@ -418,7 +374,7 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             fi = fi,
         )
         val duration = t1.tx - getDuration(
-            lt = distanceOf(b1.point, bm),
+            length = distanceOf(b1.point, bm),
             vs = b1.velocity,
             vt = t1.velocity,
         )
@@ -460,105 +416,6 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
                 t2 = t2,
                 minDistance = minDistance,
             )
-            /*
-            val c = minDistance * 2
-            val sd = getShortestDistance(b1.point, t1.finish, target = b2.point)
-            if (sd > c) return
-            //               * bf
-            //                \
-            // p       bt      \ bm      b1
-            // * - - - *--------*--------*
-            // |
-            // * b2
-            val p = getPerpendicular(b2.point, b = b1.point, c = t1.finish)
-            val a = distanceOf(b2.point, p)
-            val b = kotlin.math.sqrt(c * c - a * a)
-            val bm = p.moved(length = b, angle = angleOf(p, b1.point))
-            val fi = angleOf(bm, b2.point)
-            val f1 = angleOf(b1.point, bm)
-            val vs = b1.velocity.scalar(TimeUnit.NANOSECONDS)
-            val lt = distanceOf(b1.point, t1.finish)
-            val lm = distanceOf(b1.point, bm)
-            val mt = distanceOf(bm, t1.finish)
-            val bd = lm / lt
-            val vt = t1.velocity.scalar(TimeUnit.NANOSECONDS)
-            val vd = vt - vs
-            val v1 = vs + vd * bd
-            val tt = t1.tx
-            val tm = ((2 * lm) / (vs + v1)).nanoseconds
-            val v1t = v1 * kotlin.math.cos(f1 - fi) * (b1.mass - b2.mass)
-            val v1x = v1t * kotlin.math.cos(fi) / (b1.mass + b2.mass) + v1 * kotlin.math.sin(f1 - fi) * kotlin.math.cos(fi + kotlin.math.PI / 2)
-            val v1y = v1t * kotlin.math.sin(fi) / (b1.mass + b2.mass) + v1 * kotlin.math.sin(f1 - fi) * kotlin.math.sin(fi + kotlin.math.PI / 2)
-            val v1m = offsetOf(dX = v1x, dY = v1y)
-            val m1 = move(
-                point = bm,
-                mass = b1.mass,
-                vs = distanceOf(v1m),
-                angle = angleOf(v1m),
-                timeDiff = tt - tm,
-                forces = env.Ff,
-            )
-            t1.velocity.set(magnitude = m1.vx, angle = angleOf(v1m), timeUnit = TimeUnit.NANOSECONDS)
-            t1.start = m1.start
-            t1.finish = m1.finish
-            val v2t = 2 * b1.mass * v1 * kotlin.math.cos(f1 - fi)
-            val v2x = v2t * kotlin.math.cos(fi) / (b1.mass + b2.mass)
-            val v2y = v2t * kotlin.math.sin(fi) / (b1.mass + b2.mass)
-            val v2m = offsetOf(dX = v2x, dY = v2y)
-            val m2 = move(
-                point = b2.point,
-                mass = b2.mass,
-                vs = distanceOf(v2m),
-                angle = angleOf(v2m),
-                timeDiff = tt - tm,
-                forces = env.Ff,
-            )
-            t2.velocity.set(magnitude = m2.vx, angle = angleOf(v2m), timeUnit = TimeUnit.NANOSECONDS)
-            t2.start = m2.start
-            t2.finish = m2.finish
-            val vf = t1.velocity.scalar(TimeUnit.NANOSECONDS)
-            val tf = distanceOf(t1.start, t1.finish)
-            val message = """
-                 ->
-                vs1: ${vs.toString(points = 16)}
-                vm1: ${v1.toString(points = 16)}
-                vf1: ${vf.toString(points = 16)}
-                vm2: ${m2.vs.toString(points = 16)}
-                vf2: ${m2.vx.toString(points = 16)}
-                lt: ${lt.toString(points = 8)}
-                lm: ${lm.toString(points = 8)}
-                bd: ${bd.toString(points = 8)}
-                vd: ${vd.toString(points = 16)}
-                tt: ${tt.inWholeNanoseconds}
-                tm: ${tm.inWholeNanoseconds}
-                fi: ${fi.toString(points = 8)}
-                f1: ${f1.toString(points = 8)}
-                mt: ${mt.toString(points = 8)}
-                tf: ${tf.toString(points = 8)}
-                 <-
-            """.trimIndent()
-            println(message)
-            */
-            /*
-            val v1 = t1.velocity.scalar(TimeUnit.NANOSECONDS)
-            val v1x = kotlin.math.cos(fi) / (b1.mass + b2.mass) + v1 * kotlin.math.cos(fi + kotlin.math.PI / 2)
-            val v1y = kotlin.math.sin(fi) / (b1.mass + b2.mass) + v1 * kotlin.math.sin(fi + kotlin.math.PI / 2)
-            t1.velocity.set(dX = v1x, dY = v1y, timeUnit = TimeUnit.NANOSECONDS)
-            val vx = t1.velocity.scalar(TimeUnit.NANOSECONDS)
-            val l = distanceOf(b1.point, bm)
-            val vs = v1
-            val t = ((2 * l) / (vs + vx)).nanoseconds
-            val moved = move(
-                point = bm,
-                mass = b1.mass,
-                velocity = t1.velocity,
-                timeDiff = timeDiff - t,
-                Ff = env.Ff,
-            )
-            t1.start = moved.start
-            */
-//            t1.start = bm
-//            t1.finish = bm.moved(length = distanceOf(bm, t1.finish), angle = fi + kotlin.math.PI)
         } else {
             // todo
         }
