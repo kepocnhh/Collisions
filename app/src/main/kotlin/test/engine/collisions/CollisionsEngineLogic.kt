@@ -36,6 +36,7 @@ import sp.kx.math.toString
 import sp.kx.math.vectorOf
 import sp.kx.physics.MutableVelocity
 import sp.kx.physics.Velocity
+import sp.kx.physics.getMiddleSpeed
 import test.engine.collisions.entity.Body
 import test.engine.collisions.entity.Dot
 import test.engine.collisions.entity.Line
@@ -359,6 +360,10 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
         return vs + vd * bd
     }
 
+    private fun Velocity.diff(other: Velocity, timeUnit: TimeUnit): Double {
+        return (scalar(TimeUnit.NANOSECONDS) - other.scalar(TimeUnit.NANOSECONDS)) * timeUnit.toNanos(1)
+    }
+
     private fun getDuration(
         lt: Double,
         vs: Double,
@@ -394,11 +399,12 @@ internal class CollisionsEngineLogic(private val engine: Engine) : EngineLogic {
             p2 = b2.point,
             minDistance = minDistance,
         ) ?: return
-        val v1 = getSpeed(
-            vs = b1.velocity.scalar(TimeUnit.NANOSECONDS),
-            vt = t1.velocity.scalar(TimeUnit.NANOSECONDS),
+        val v1 = getMiddleSpeed(
+            vs = b1.velocity,
+            vt = t1.velocity,
             lm = distanceOf(b1.point, bm),
             lt = distanceOf(b1.point, t1.finish),
+            timeUnit = TimeUnit.NANOSECONDS,
         )
         t1.velocity.set(magnitude = v1, angle = t1.velocity.angle(), timeUnit = TimeUnit.NANOSECONDS)
         val fi = angleOf(bm, b2.point)

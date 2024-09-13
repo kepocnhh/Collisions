@@ -21,66 +21,23 @@ import sp.kx.math.mut
 import sp.kx.math.plus
 import sp.kx.math.toString
 import sp.kx.math.vectorOf
+import sp.kx.physics.Acceleration
+import sp.kx.physics.MutableAcceleration
 import test.engine.collisions.entity.Moving
 import test.engine.collisions.entity.MutableMoving
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 
-@Deprecated("sp.kx.math.measure.Acceleration")
-internal interface Acceleration {
-    fun per(timeUnit: TimeUnit): Double
-    fun speed(duration: Duration, timeUnit: TimeUnit): Double
-}
-
-@Deprecated("sp.kx.math.measure.MutableAcceleration")
-internal class MutableAcceleration : Acceleration {
-    private var raw: Double
-
-    constructor(magnitude: Double, timeUnit: TimeUnit) {
-        val nanos = timeUnit.toNanos(1)
-        raw = magnitude / (nanos * nanos)
-    }
-
-    override fun per(timeUnit: TimeUnit): Double {
-        val nanos = timeUnit.toNanos(1)
-        return raw * nanos * nanos
-    }
-
-    override fun speed(duration: Duration, timeUnit: TimeUnit): Double {
-        val magnitude = raw * duration.inWholeNanoseconds // units per nanosec
-        return magnitude / timeUnit.toNanos(1)
-    }
-
-    override fun toString(): String {
-        return toString(timeUnit = TimeUnit.SECONDS)
-    }
-
-    fun toString(timeUnit: TimeUnit): String {
-        val magnitude = per(timeUnit = timeUnit)
-        return "{${magnitude.toString(points = 12)}/${timeUnit}^2}"
-    }
-
-    fun set(magnitude: Double, timeUnit: TimeUnit) {
-        val nanos = timeUnit.toNanos(1)
-        raw = magnitude / (nanos * nanos)
-    }
-}
-
-@Deprecated("sp.kx.math.measure.MutableSpeed.set")
+@Deprecated("sp.kx.physics.MutableSpeed.set")
 internal fun MutableSpeed.set(acceleration: Acceleration, duration: Duration) {
     val v = per(TimeUnit.NANOSECONDS)
-    val d = acceleration.speed(duration, TimeUnit.NANOSECONDS)
+    val d = acceleration.speed(timeUnit = TimeUnit.NANOSECONDS, duration = duration)
     set(v + d, TimeUnit.NANOSECONDS)
 }
 
-@Deprecated("sp.kx.math.measure.MutableSpeed.clear")
+@Deprecated("sp.kx.physics.MutableSpeed.clear")
 internal fun MutableSpeed.clear() {
-    set(0.0, TimeUnit.NANOSECONDS)
-}
-
-@Deprecated("sp.kx.math.measure.MutableAcceleration.clear")
-internal fun MutableAcceleration.clear() {
     set(0.0, TimeUnit.NANOSECONDS)
 }
 
@@ -153,12 +110,12 @@ internal fun PolygonDrawer.drawCircle(
     }
 }
 
-@Deprecated("sp.kx.math.measure.mut")
+@Deprecated("sp.kx.physics.mut")
 internal fun Speed.mut(): MutableSpeed {
     return MutableSpeed(magnitude = per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
 }
 
-@Deprecated("sp.kx.math.measure.set")
+@Deprecated("sp.kx.physics.MutableSpeed.set")
 internal fun MutableSpeed.set(other: Speed) {
     set(magnitude = other.per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
 }
@@ -170,14 +127,9 @@ internal fun MutableMoving.set(other: Moving) {
     direction = other.direction
 }
 
-@Deprecated("sp.kx.math.measure.time")
+@Deprecated("sp.kx.physics.Speed.duration")
 internal fun Speed.duration(length: Double): Duration {
     return (length / per(TimeUnit.NANOSECONDS)).nanoseconds
-}
-
-@Deprecated("sp.kx.math.measure.set")
-internal fun MutableAcceleration.set(other: Acceleration) {
-    return set(magnitude = other.per(TimeUnit.NANOSECONDS), timeUnit = TimeUnit.NANOSECONDS)
 }
 
 @Deprecated("sp.kx.math.measure.Momentum")
